@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="vi"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ăn tré hong ERP</title>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--navy:#0f2742;--bg:#eef1f5;--ink:#1e293b;--mut:#64748b;--line:#e2e8f0;--ok:#059669;--warn:#d97706;--bad:#e11d48;--card:#fff;color-scheme:light}
+*{box-sizing:border-box}
+body{margin:0;font:14px/1.45 'Be Vietnam Pro',system-ui,sans-serif;background:var(--bg);color:var(--ink);padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}
+button,input,select{font:inherit}
+.shell{display:flex;min-height:100vh}
+.side{width:230px;flex-shrink:0;background:var(--navy);color:#cbd5e1;padding:8px 0;overflow-y:auto}
+.side h1{color:#fff;font-size:17px;margin:10px 16px 14px}
+.side button{display:block;width:100%;text-align:left;background:none;border:0;color:inherit;padding:10px 16px;cursor:pointer}
+.side button:hover{background:rgba(255,255,255,.08)}.side button.on{background:#059669;color:#fff}
+.main{flex:1;min-width:0;display:flex;flex-direction:column}
+.top{background:#fff;border-bottom:1px solid var(--line);padding:8px 14px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.top .sp{flex:1}
+.content{padding:14px;flex:1}
+h2{margin:0 0 12px;font-size:19px}h3{margin:0 0 8px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:12px}
+.btn{background:var(--ok);color:#fff;border:0;border-radius:7px;padding:8px 14px;cursor:pointer;font-weight:500}
+.btn:hover{filter:brightness(.95)}.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn.ghost{background:#fff;color:var(--ink);border:1px solid #cbd5e1}.btn.red{background:var(--bad)}.btn.amber{background:var(--warn)}.btn.sm{padding:4px 9px;font-size:12px}
+input,select{border:1px solid #cbd5e1;border-radius:7px;padding:8px 10px;background:#fff;color:var(--ink);max-width:100%}
+label{display:block;margin-bottom:10px;color:var(--mut);font-size:13px}label input,label select{display:block;width:100%;margin-top:4px;color:var(--ink)}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.end{justify-content:flex-end}
+.sc{overflow-x:auto}table{width:100%;border-collapse:collapse}
+th{text-align:left;color:var(--mut);font-weight:500;padding:7px 10px 7px 0;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:8px 10px 8px 0;border-bottom:1px solid #f1f5f9;vertical-align:middle}
+.badge{display:inline-block;padding:1px 8px;border-radius:5px;font-size:12px;white-space:nowrap}
+.b-ok{background:#d1fae5;color:#065f46}.b-warn{background:#fef3c7;color:#92400e}.b-bad{background:#ffe4e6;color:#9f1239}.b-mut{background:#f1f5f9;color:#475569}.b-info{background:#e0f2fe;color:#075985}
+.grid{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(210px,1fr))}
+.kpi{background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px}.kpi b{display:block;font-size:20px;margin-top:2px}.kpi span{color:var(--mut);font-size:12px}
+.pos{display:grid;grid-template-columns:1fr 340px;gap:12px;align-items:start}
+.tiles{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
+.tile{background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px;text-align:left;cursor:pointer;min-height:92px}
+.tile:hover{border-color:var(--ok)}.tile:disabled{opacity:.45;cursor:not-allowed}.tile b{display:block;margin-bottom:4px}.tile span{color:var(--mut);font-size:12px}
+.cart .ln{display:flex;justify-content:space-between;align-items:center;gap:6px;padding:7px 0;border-bottom:1px solid #f1f5f9}
+.cart .total{font-size:22px;font-weight:700;margin:8px 0}
+.qty{display:flex;align-items:center;gap:6px}.qty button{width:28px;height:28px;border-radius:6px;border:1px solid #cbd5e1;background:#fff;cursor:pointer}
+.warn{background:#fef3c7;color:#92400e;border-radius:8px;padding:10px 12px;margin-bottom:12px}
+.empty{color:var(--mut);padding:24px;text-align:center}
+.modal{position:fixed;inset:0;background:rgba(15,23,42,.5);display:flex;align-items:center;justify-content:center;padding:14px;z-index:50}
+.box{background:#fff;border-radius:10px;padding:18px;width:100%;max-width:440px;max-height:100%;overflow:auto}
+#toast{position:fixed;right:12px;top:calc(12px + env(safe-area-inset-top));z-index:70;display:flex;flex-direction:column;gap:6px}
+.t{background:var(--navy);color:#fff;padding:10px 14px;border-radius:8px;max-width:320px;box-shadow:0 2px 8px rgba(0,0,0,.25)}.t.bad{background:var(--bad)}
+.login{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--navy);padding:14px}
+.login form{background:#fff;border-radius:12px;padding:24px;width:100%;max-width:360px}
+.menu{display:none}
+@media(max-width:820px){
+ .side{position:fixed;inset:0 auto 0 0;z-index:40;transform:translateX(-100%);transition:transform .2s}.side.open{transform:none}
+ .menu{display:inline-block}.pos{grid-template-columns:1fr}
+}
+</style></head>
+<body><div id="app"></div><div id="toast"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script>
+/* ============ CẤU HÌNH ============ */
+const SB_URL = 'https://fouukklbtrrbrdzmlkfd.supabase.co';
+const SB_KEY = 'sb_publishable__RArgZFOUSNg-OuF90VbIw_spkX93G2';   // khóa công khai; quyền thật nằm ở cơ sở dữ liệu
+const sb = supabase.createClient(SB_URL, SB_KEY);
+
+/* ============ TIỆN ÍCH ============ */
+const h = (t, a, ...c) => {
+  const e = document.createElement(t); let val;
+  for (const [k, v] of Object.entries(a || {})) {
+    if (v == null || v === false) continue;
+    if (k === 'class') e.className = v; else if (k === 'value') val = v;
+    else if (k.startsWith('on')) e.addEventListener(k.slice(2), v); else e.setAttribute(k, v === true ? '' : v);
+  }
+  c.flat(9).forEach(x => { if (x == null || x === false) return; e.append(x.nodeType ? x : document.createTextNode(String(x))); });
+  if (val !== undefined) e.value = val;
+  return e;
+};
+const fm = n => Math.round(+n || 0).toLocaleString('vi-VN') + 'đ';
+const vnDate = (d = new Date()) => new Date(d).toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' });
+const addDays = n => vnDate(new Date(Date.now() + n * 864e5));
+const vnTime = t => t ? new Date(t).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour12: false }) : '';
+const badge = (t, k = 'mut') => h('span', { class: 'badge b-' + k }, t);
+const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random());
+const ROLE_VI = { ADMIN: 'Quản trị', OPERATIONS_MANAGER: 'Quản lý vận hành', SALES_MANAGER: 'Quản lý kinh doanh', SALES: 'Kinh doanh', PRODUCTION: 'Sản xuất', WAREHOUSE: 'Kho', QC: 'QC', FINANCE: 'Tài chính', OUTLET_MANAGER: 'Quản lý điểm bán', OUTLET_STAFF: 'Nhân viên điểm bán' };
+const q = async p => { const { data, error } = await p; if (error) throw error; return data; };
+const rpc = (n, a) => q(sb.rpc(n, a));
+const toast = (m, bad) => { const t = h('div', { class: 't' + (bad ? ' bad' : '') }, m); $('#toast').append(t); setTimeout(() => t.remove(), bad ? 6000 : 3500); };
+const fail = e => { console.error(e); toast((e && e.message) || String(e), true); };
+const $ = (s, r = document) => r.querySelector(s);
+const table = (cols, rows) => h('div', { class: 'sc' }, h('table', {}, h('thead', {}, h('tr', {}, cols.map(c => h('th', {}, c)))),
+  h('tbody', {}, rows.length ? rows.map(r => h('tr', {}, r.map(c => h('td', {}, c)))) : h('tr', {}, h('td', { colspan: cols.length, class: 'empty' }, 'Chưa có dữ liệu')))));
+
+function dialog(title, fields, okText = 'Lưu') {
+  return new Promise(res => {
+    const inputs = fields.map(f => {
+      const el = f.opts ? h('select', {}, f.opts.map(o => h('option', { value: o[0] }, o[1]))) : h('input', { type: f.type || 'text', placeholder: f.ph || '', value: f.val ?? '', step: f.type === 'number' ? 'any' : null });
+      if (f.opts && f.val != null) el.value = f.val;
+      return [f, el];
+    });
+    const close = v => { m.remove(); res(v); };
+    const m = h('div', { class: 'modal', onclick: e => { if (e.target === m) close(null); } },
+      h('div', { class: 'box' }, h('h3', {}, title), inputs.map(([f, el]) => h('label', {}, f.l, el)),
+        h('div', { class: 'row end' }, h('button', { class: 'btn ghost', onclick: () => close(null) }, 'Hủy'),
+          h('button', { class: 'btn', onclick: () => { const o = {}; inputs.forEach(([f, el]) => o[f.k] = f.type === 'number' ? (el.value === '' ? null : +el.value) : el.value.trim ? el.value.trim() : el.value); close(o); } }, okText))));
+    document.body.append(m); const first = m.querySelector('input,select'); if (first) first.focus();
+  });
+}
+const confirmBox = msg => new Promise(res => {
+  const close = v => { m.remove(); res(v); };
+  const m = h('div', { class: 'modal' }, h('div', { class: 'box' }, h('p', {}, msg), h('div', { class: 'row end' },
+    h('button', { class: 'btn ghost', onclick: () => close(false) }, 'Hủy'), h('button', { class: 'btn', onclick: () => close(true) }, 'Đồng ý'))));
+  document.body.append(m);
+});
+
+/* ============ TRẠNG THÁI & QUYỀN ============ */
+const S = { prof: null, outlets: [], mine: [], oid: null, mod: null, products: [], notifs: [] };
+const role = () => S.prof.role;
+const is = (...r) => r.includes(role());
+const stores = () => S.outlets.filter(o => o.kind === 'store');
+const oname = id => (S.outlets.find(o => o.id === id) || {}).name || '—';
+const pname = id => (S.products.find(p => p.id === id) || {}).name || id;
+const MODS = [
+  ['dash',  'Theo dõi điểm bán',  ['ADMIN', 'OPERATIONS_MANAGER', 'SALES_MANAGER', 'FINANCE', 'OUTLET_MANAGER']],
+  ['pos',   'Bán hàng',           ['ADMIN', 'OPERATIONS_MANAGER', 'OUTLET_MANAGER', 'OUTLET_STAFF']],
+  ['sales', 'Hóa đơn bán lẻ',     ['ADMIN', 'OPERATIONS_MANAGER', 'SALES_MANAGER', 'FINANCE', 'OUTLET_MANAGER', 'OUTLET_STAFF']],
+  ['shift', 'Ca bán & chốt ca',   ['ADMIN', 'OPERATIONS_MANAGER', 'OUTLET_MANAGER', 'OUTLET_STAFF']],
+  ['stock', 'Tồn kho & FEFO',     ['ADMIN', 'OPERATIONS_MANAGER', 'PRODUCTION', 'WAREHOUSE', 'QC', 'OUTLET_MANAGER', 'OUTLET_STAFF']],
+  ['recv',  'Chuyển & nhận kho',  ['ADMIN', 'OPERATIONS_MANAGER', 'WAREHOUSE', 'OUTLET_MANAGER', 'OUTLET_STAFF']],
+  ['batch', 'Sản xuất & QC',      ['ADMIN', 'OPERATIONS_MANAGER', 'PRODUCTION', 'QC']],
+  ['orders','Đơn hàng B2B',       ['ADMIN', 'OPERATIONS_MANAGER', 'SALES_MANAGER', 'SALES', 'PRODUCTION', 'WAREHOUSE', 'QC', 'FINANCE']],
+  ['cust',  'Khách hàng & công nợ', ['ADMIN', 'OPERATIONS_MANAGER', 'SALES_MANAGER', 'SALES', 'FINANCE']],
+  ['audit', 'Nhật ký thao tác',   ['ADMIN']]
+];
+const allowed = () => MODS.filter(m => m[2].includes(role()));
+const needsOutlet = m => ['pos', 'shift', 'recv'].includes(m);
+
+/* ============ KHUNG ỨNG DỤNG ============ */
+const app = $('#app');
+function loginView(msg) {
+  let show = false;
+  const em = h('input', { type: 'email', autocomplete: 'username', placeholder: 'email@antrehong.vn' });
+  const pw = h('input', { type: 'password', autocomplete: 'current-password' });
+  const err = h('div', { style: 'color:var(--bad);margin:8px 0' }, msg || '');
+  const btn = h('button', { class: 'btn', style: 'width:100%' }, 'Đăng nhập');
+  const f = h('form', { onsubmit: async e => {
+    e.preventDefault(); err.textContent = ''; btn.disabled = true; btn.textContent = 'Đang đăng nhập…';
+    const { error } = await sb.auth.signInWithPassword({ email: em.value.trim(), password: pw.value });
+    btn.disabled = false; btn.textContent = 'Đăng nhập';
+    if (error) err.textContent = error.message === 'Invalid login credentials' ? 'Sai email hoặc mật khẩu.' : error.message;
+  } },
+    h('h2', {}, 'Ăn tré hong ERP'), h('div', { style: 'color:var(--mut);margin:-6px 0 14px' }, 'Đăng nhập bằng tài khoản được cấp'),
+    h('label', {}, 'Email', em),
+    h('label', {}, 'Mật khẩu', h('div', { class: 'row', style: 'flex-wrap:nowrap' }, pw,
+      h('button', { type: 'button', class: 'btn ghost sm', onclick: () => { show = !show; pw.type = show ? 'text' : 'password'; } }, 'Hiện/Ẩn'))),
+    err, btn,
+    h('div', { style: 'margin-top:10px;text-align:center' }, h('a', { href: '#', onclick: async e => {
+      e.preventDefault(); if (!em.value) { err.textContent = 'Nhập email trước.'; return; }
+      const { error } = await sb.auth.resetPasswordForEmail(em.value.trim(), { redirectTo: location.href.split('#')[0] });
+      err.style.color = error ? 'var(--bad)' : 'var(--ok)'; err.textContent = error ? error.message : 'Đã gửi email đặt lại mật khẩu (nếu tài khoản tồn tại).';
+    } }, 'Quên mật khẩu?')));
+  app.replaceChildren(h('div', { class: 'login' }, f));
+}
+
+async function boot(user) {
+  try {
+    const prof = await q(sb.from('profiles').select('*').eq('id', user.id).maybeSingle());
+    if (!prof || prof.status !== 'Active') { await sb.auth.signOut(); return loginView('Tài khoản chưa được kích hoạt hoặc đã bị khóa.'); }
+    S.prof = prof;
+    const [outs, mine, prods] = await Promise.all([
+      q(sb.from('outlets').select('*').order('code')), q(sb.from('user_outlets').select('outlet_id')),
+      q(sb.from('products').select('id,name,retail_price,active').order('id'))]);
+    S.outlets = outs; S.mine = mine.map(x => x.outlet_id); S.products = prods;
+    const st = stores(); S.oid = (st.find(o => S.mine.includes(o.id)) || st[0] || {}).id || null;
+    S.mod = (allowed()[0] || [])[0] || null;
+    await loadNotifs(); shell(); subscribe(); go(S.mod);
+  } catch (e) { fail(e); loginView('Không tải được dữ liệu: ' + e.message); }
+}
+
+function shell() {
+  const side = h('div', { class: 'side' }, h('h1', {}, 'Ăn tré hong ERP'),
+    allowed().map(m => h('button', { 'data-m': m[0], onclick: () => { side.classList.remove('open'); go(m[0]); } }, m[1])));
+  const sel = h('select', { id: 'osel', onchange: e => { S.oid = e.target.value; go(S.mod); } },
+    S.outlets.filter(o => o.kind === 'store' || is('ADMIN', 'OPERATIONS_MANAGER', 'WAREHOUSE', 'PRODUCTION', 'QC')).map(o => h('option', { value: o.id }, o.name)));
+  if (S.oid) sel.value = S.oid;
+  const bell = h('button', { class: 'btn ghost', id: 'bell', onclick: showNotifs }, 'Thông báo');
+  const top = h('div', { class: 'top' },
+    h('button', { class: 'btn ghost menu', onclick: () => side.classList.toggle('open') }, '☰'),
+    h('b', { id: 'crumb' }, ''), h('div', { class: 'sp' }), S.outlets.length > 1 || stores().length ? sel : null, bell,
+    h('span', { style: 'color:var(--mut)' }, S.prof.full_name || S.prof.email, ' · ', ROLE_VI[role()]),
+    h('button', { class: 'btn ghost sm', onclick: changePw }, 'Đổi mật khẩu'),
+    h('button', { class: 'btn ghost sm', onclick: () => sb.auth.signOut() }, 'Thoát'));
+  app.replaceChildren(h('div', { class: 'shell' }, side, h('div', { class: 'main' }, top, h('div', { class: 'content', id: 'view' }))));
+}
+async function changePw() {
+  const v = await dialog('Đổi mật khẩu', [{ k: 'p', l: 'Mật khẩu mới (tối thiểu 8 ký tự)', type: 'password' }]);
+  if (!v) return; if ((v.p || '').length < 8) return toast('Mật khẩu tối thiểu 8 ký tự', true);
+  const { error } = await sb.auth.updateUser({ password: v.p }); error ? fail(error) : toast('Đã đổi mật khẩu');
+}
+let seq = 0;
+async function go(mod, quiet) {
+  if (!mod) return $('#view').replaceChildren(h('div', { class: 'empty' }, 'Tài khoản chưa được cấp quyền vào chức năng nào. Liên hệ quản trị.'));
+  S.mod = mod; const my = ++seq; const m = MODS.find(x => x[0] === mod);
+  document.querySelectorAll('.side button').forEach(b => b.classList.toggle('on', b.dataset.m === mod));
+  $('#crumb').textContent = m[1];
+  const sel = $('#osel'); if (sel) sel.style.display = ['dash', 'orders', 'cust', 'batch', 'audit'].includes(mod) ? 'none' : '';
+  const view = $('#view'); if (!quiet) view.replaceChildren(h('div', { class: 'empty' }, 'Đang tải…'));
+  try { const node = await VIEWS[mod](); if (my === seq) view.replaceChildren(node); } catch (e) { fail(e); if (my === seq && !quiet) view.replaceChildren(h('div', { class: 'empty' }, 'Không tải được: ' + e.message)); }
+}
+const refresh = () => { if (!S.prof || document.querySelector('.modal') || S.mod === 'pos') return; const a = document.activeElement; if (a && ['INPUT', 'SELECT'].includes(a.tagName)) return; go(S.mod, true); };
+
+/* ============ THÔNG BÁO & REALTIME ============ */
+async function loadNotifs() {
+  try { S.notifs = await q(sb.from('notifications').select('id,created_at,message').order('id', { ascending: false }).limit(30)); } catch (e) { S.notifs = []; }
+  const seen = +localStorage.getItem('nseen') || 0, n = S.notifs.filter(x => x.id > seen).length, b = $('#bell');
+  if (b) b.textContent = 'Thông báo' + (n ? ' (' + n + ')' : '');
+}
+function showNotifs() {
+  if (S.notifs[0]) localStorage.setItem('nseen', S.notifs[0].id);
+  const m = h('div', { class: 'modal', onclick: e => { if (e.target === m) { m.remove(); loadNotifs(); } } }, h('div', { class: 'box' }, h('h3', {}, 'Thông báo'),
+    S.notifs.length ? S.notifs.map(n => h('div', { style: 'padding:7px 0;border-bottom:1px solid var(--line)' }, n.message, h('div', { style: 'color:var(--mut);font-size:12px' }, vnTime(n.created_at)))) : h('div', { class: 'empty' }, 'Không có thông báo'),
+    h('div', { class: 'row end', style: 'margin-top:10px' }, h('button', { class: 'btn ghost', onclick: () => { m.remove(); loadNotifs(); } }, 'Đóng'))));
+  document.body.append(m);
+}
+let chan = null;
+function subscribe() {
+  if (chan) sb.removeChannel(chan); let t;
+  chan = sb.channel('live');
+  ['retail_sales', 'stock_movements', 'notifications', 'orders', 'shifts'].forEach(tb => chan.on('postgres_changes', { event: '*', schema: 'public', table: tb }, () => {
+    clearTimeout(t); t = setTimeout(() => { refresh(); if (tb === 'notifications') loadNotifs(); }, 700);
+  }));
+  chan.subscribe();
+}
+
+/* ============ MÀN HÌNH ============ */
+const needOutlet = () => h('div', { class: 'empty' }, 'Tài khoản chưa được gán điểm bán. Liên hệ quản trị để được gán.');
+const sellable = rows => { const a = {}; rows.filter(x => x.qc_status === 'PASS' && !x.locked && x.expires_on >= vnDate()).forEach(x => a[x.product_id] = (a[x.product_id] || 0) + x.qty); return a; };
+
+async function posView() {
+  const o = S.oid; if (!o) return needOutlet();
+  const [stock, shift] = await Promise.all([
+    q(sb.from('stock_on_hand').select('product_id,qty,expires_on,qc_status,locked').eq('outlet_id', o)),
+    q(sb.from('shifts').select('id').eq('outlet_id', o).is('closed_at', null).limit(1))]);
+  const avail = sellable(stock), cart = {}; let pay = 'cash', disc = '', note = '', ref = uid(), busy = false;
+  const root = h('div'), canDisc = !is('OUTLET_STAFF');
+  const total = () => Object.entries(cart).reduce((s, [id, n]) => s + n * (S.products.find(p => p.id === id).retail_price), 0);
+  const draw = () => {
+    const sum = total(), d = Math.min(+disc || 0, sum);
+    root.replaceChildren(h('div', {},
+      !shift.length ? h('div', { class: 'warn' }, 'Chưa mở ca tại điểm bán này. Vào "Ca bán & chốt ca" để mở ca trước khi bán.') : null,
+      h('div', { class: 'pos' },
+        h('div', { class: 'tiles' }, S.products.filter(p => p.active).map(p => {
+          const left = (avail[p.id] || 0) - (cart[p.id] || 0);
+          return h('button', { class: 'tile', disabled: left <= 0 || !shift.length, onclick: () => { cart[p.id] = (cart[p.id] || 0) + 1; draw(); } },
+            h('b', {}, p.name), h('div', {}, fm(p.retail_price)), h('span', {}, left > 0 ? 'Còn ' + left : 'Hết hàng'));
+        })),
+        h('div', { class: 'card cart' }, h('h3', {}, 'Giỏ hàng'),
+          Object.keys(cart).length ? Object.entries(cart).map(([id, n]) => h('div', { class: 'ln' }, h('div', {}, pname(id), h('div', { style: 'color:var(--mut);font-size:12px' }, fm(S.products.find(p => p.id === id).retail_price))),
+            h('div', { class: 'qty' }, h('button', { onclick: () => { cart[id]--; if (cart[id] <= 0) delete cart[id]; draw(); } }, '−'), n,
+              h('button', { disabled: n >= (avail[id] || 0), onclick: () => { cart[id]++; draw(); } }, '+')))) : h('div', { class: 'empty' }, 'Chọn món để thêm vào giỏ'),
+          h('label', {}, 'Thanh toán', h('select', { onchange: e => pay = e.target.value, value: pay }, [['cash', 'Tiền mặt'], ['transfer', 'Chuyển khoản'], ['qr', 'QR']].map(x => h('option', { value: x[0] }, x[1])))),
+          canDisc ? h('label', {}, 'Giảm giá (đ)', h('input', { type: 'number', min: 0, value: disc, oninput: e => { disc = e.target.value; const t = $('.cart .total'); if (t) t.textContent = fm(sum - Math.min(+disc || 0, sum)); } })) : null,
+          h('label', {}, 'Ghi chú', h('input', { value: note, oninput: e => note = e.target.value })),
+          h('div', { class: 'total' }, fm(sum - d)),
+          h('button', { class: 'btn', style: 'width:100%;padding:12px', disabled: !Object.keys(cart).length || !shift.length || busy, onclick: async () => {
+            busy = true; draw();
+            try {
+              const id = await rpc('sell_retail', { p_outlet: o, p_items: Object.entries(cart).map(([product_id, qty]) => ({ product_id, qty })), p_payment: pay, p_discount: canDisc ? (+disc || 0) : 0, p_note: note || null, p_client_ref: ref });
+              const s = await q(sb.from('retail_sales').select('code,total').eq('id', id).single());
+              toast('Đã bán ' + s.code + ' — ' + fm(s.total)); go('pos');
+            } catch (e) { fail(e); busy = false; draw(); }       // giữ nguyên mã giao dịch: bấm lại không bị tính hai lần
+          } }, busy ? 'Đang xử lý…' : 'Thanh toán')))));
+  };
+  draw(); return root;
+}
+
+async function salesView() {
+  const filter = h('select', { onchange: () => go('sales') }, [h('option', { value: '' }, 'Tất cả điểm bán'), stores().map(o => h('option', { value: o.id }, o.name))]);
+  const staffOnly = is('OUTLET_MANAGER', 'OUTLET_STAFF');
+  let qy = sb.from('retail_sales').select('id,code,sold_at,payment,discount,total,status,void_reason,outlet_id').order('sold_at', { ascending: false }).limit(100);
+  const f = staffOnly ? S.oid : (S._sf || ''); if (f) qy = qy.eq('outlet_id', f);
+  filter.value = S._sf || ''; filter.onchange = e => { S._sf = e.target.value; go('sales'); };
+  const rows = await q(qy);
+  const canApprove = is('ADMIN', 'OPERATIONS_MANAGER', 'OUTLET_MANAGER'), canReq = is('ADMIN', 'OPERATIONS_MANAGER', 'OUTLET_MANAGER', 'OUTLET_STAFF');
+  const PAY = { cash: 'Tiền mặt', transfer: 'Chuyển khoản', qr: 'QR' }, ST = { completed: ['Hoàn tất', 'ok'], void_requested: ['Chờ duyệt hủy', 'warn'], voided: ['Đã hủy', 'bad'] };
+  const detail = async (id, tr) => {
+    if (tr.nextSibling && tr.nextSibling.dataset && tr.nextSibling.dataset.d === id) return tr.nextSibling.remove();
+    const items = await q(sb.from('retail_sale_items').select('product_id,qty,unit_price').eq('sale_id', id));
+    tr.after(h('tr', { 'data-d': id }, h('td', { colspan: 8, style: 'background:#f8fafc' }, items.map(i => h('div', {}, pname(i.product_id) + ' × ' + i.qty + ' — ' + fm(i.unit_price * i.qty))))));
+  };
+  const tb = h('tbody', {}, rows.length ? rows.map(r => {
+    const tr = h('tr', {}, h('td', {}, r.code), h('td', {}, vnTime(r.sold_at)), h('td', {}, oname(r.outlet_id)), h('td', {}, PAY[r.payment]), h('td', {}, fm(r.total) + (r.discount > 0 ? ' (−' + fm(r.discount) + ')' : '')),
+      h('td', {}, badge(ST[r.status][0], ST[r.status][1]), r.void_reason ? h('div', { style: 'font-size:12px;color:var(--mut)' }, r.void_reason) : null),
+      h('td', {}, h('button', { class: 'btn ghost sm', onclick: () => detail(r.id, tr).catch(fail) }, 'Chi tiết')),
+      h('td', { class: 'row' },
+        r.status === 'completed' && canReq ? h('button', { class: 'btn amber sm', onclick: async () => { const v = await dialog('Yêu cầu hủy ' + r.code, [{ k: 'r', l: 'Lý do hủy (bắt buộc)' }], 'Gửi yêu cầu'); if (!v) return; try { await rpc('request_void', { p_sale: r.id, p_reason: v.r }); toast('Đã gửi yêu cầu hủy'); go('sales'); } catch (e) { fail(e); } } }, 'Yêu cầu hủy') : null,
+        r.status === 'void_requested' && canApprove ? [h('button', { class: 'btn red sm', onclick: async () => { if (!await confirmBox('Duyệt hủy ' + r.code + '? Hàng sẽ được trả lại kho.')) return; try { await rpc('approve_void', { p_sale: r.id }); toast('Đã hủy hóa đơn'); go('sales'); } catch (e) { fail(e); } } }, 'Duyệt hủy'),
+          h('button', { class: 'btn ghost sm', onclick: async () => { try { await rpc('reject_void', { p_sale: r.id }); go('sales'); } catch (e) { fail(e); } } }, 'Từ chối')] : null));
+    return tr;
+  }) : h('tr', {}, h('td', { colspan: 8, class: 'empty' }, 'Chưa có hóa đơn')));
+  return h('div', {}, h('div', { class: 'row', style: 'margin-bottom:10px' }, staffOnly ? null : filter,
+    h('span', { style: 'color:var(--mut)' }, 'Hiển thị 100 hóa đơn gần nhất')),
+    h('div', { class: 'card sc' }, h('table', {}, h('thead', {}, h('tr', {}, ['Mã', 'Thời gian', 'Điểm bán', 'Thanh toán', 'Tổng', 'Trạng thái', '', ''].map(c => h('th', {}, c)))), tb)));
+}
+
+async function shiftView() {
+  const o = S.oid; if (!o) return needOutlet();
+  const [cur, hist] = await Promise.all([
+    q(sb.from('shifts').select('*').eq('outlet_id', o).is('closed_at', null).limit(1)),
+    q(sb.from('shifts').select('*').eq('outlet_id', o).not('closed_at', 'is', null).order('closed_at', { ascending: false }).limit(10))]);
+  let body;
+  if (cur.length) {
+    const s = cur[0], sales = await q(sb.from('retail_sales').select('total,payment,status').eq('shift_id', s.id));
+    const ok = sales.filter(x => x.status === 'completed'), sum = f => ok.filter(f).reduce((a, x) => a + x.total, 0);
+    body = h('div', { class: 'card' }, h('h3', {}, 'Ca đang mở'), h('div', {}, 'Mở lúc ' + vnTime(s.opened_at) + ' · tiền đầu ca ' + fm(s.opening_cash)),
+      h('div', { class: 'grid', style: 'margin:12px 0' }, [['Số hóa đơn', ok.length], ['Doanh thu', fm(sum(() => true))], ['Tiền mặt', fm(sum(x => x.payment === 'cash'))], ['Tiền mặt kỳ vọng trong két', fm(+s.opening_cash + sum(x => x.payment === 'cash'))]].map(k => h('div', { class: 'kpi' }, h('span', {}, k[0]), h('b', {}, k[1])))),
+      h('button', { class: 'btn amber', onclick: async () => { const v = await dialog('Chốt ca', [{ k: 'c', l: 'Tiền mặt thực đếm trong két (đ)', type: 'number' }], 'Chốt ca'); if (!v || v.c == null) return;
+        try { const d = await rpc('close_shift', { p_shift: s.id, p_counted: v.c }); toast(d === 0 ? 'Đã chốt ca — khớp tiền' : 'Đã chốt ca — chênh lệch ' + fm(d) + (d < 0 ? ' (thiếu)' : ' (thừa)'), d !== 0); go('shift'); } catch (e) { fail(e); } } }, 'Chốt ca'));
+  } else body = h('div', { class: 'card' }, h('h3', {}, 'Chưa có ca mở'), h('button', { class: 'btn', onclick: async () => { const v = await dialog('Mở ca', [{ k: 'c', l: 'Tiền đầu ca trong két (đ)', type: 'number', val: 0 }], 'Mở ca'); if (!v) return;
+    try { await rpc('open_shift', { p_outlet: o, p_opening_cash: v.c || 0 }); toast('Đã mở ca'); go('shift'); } catch (e) { fail(e); } } }, 'Mở ca'));
+  return h('div', {}, body, h('div', { class: 'card' }, h('h3', {}, 'Các ca gần đây'),
+    table(['Mở', 'Chốt', 'Đầu ca', 'Kỳ vọng', 'Thực đếm', 'Chênh lệch'], hist.map(s => [vnTime(s.opened_at), vnTime(s.closed_at), fm(s.opening_cash), fm(s.expected_cash), fm(s.counted_cash),
+      (() => { const d = s.counted_cash - s.expected_cash; return badge(d === 0 ? 'Khớp' : fm(d), d === 0 ? 'ok' : 'bad'); })()]))));
+}
+
+async function stockView() {
+  const o = S.oid; const rows = await q(sb.from('stock_on_hand').select('*').eq('outlet_id', o).order('expires_on'));
+  const av = sellable(rows), t = vnDate(), soon = addDays(2);
+  return h('div', {}, h('div', { class: 'grid', style: 'margin-bottom:12px' }, S.products.map(p => h('div', { class: 'kpi' }, h('span', {}, p.id + ' — có thể bán'), h('b', {}, av[p.id] || 0)))),
+    h('div', { class: 'card' }, h('h3', {}, 'Tồn theo lô — lô hết hạn sớm nhất được xuất trước (FEFO)'),
+      table(['SKU', 'Lô', 'Hạn dùng', 'QC', 'Tồn'], rows.map(r => [pname(r.product_id), r.batch_code,
+        h('span', {}, r.expires_on, ' ', r.expires_on < t ? badge('Hết hạn', 'bad') : r.expires_on <= soon ? badge('Cận hạn', 'warn') : null),
+        r.locked ? badge('Khóa', 'bad') : badge(r.qc_status, r.qc_status === 'PASS' ? 'ok' : 'warn'), r.qty]))));
+}
+
+async function recvView() {
+  const o = S.oid, canCreate = is('ADMIN', 'OPERATIONS_MANAGER', 'WAREHOUSE');
+  const rows = await q(sb.from('transfers').select('id,code,created_at,status,from_outlet,to_outlet,transfer_items(qty,product_id,batches(code,expires_on))').order('created_at', { ascending: false }).limit(30));
+  const list = rows.filter(r => canCreate || r.to_outlet === o);
+  return h('div', {}, canCreate ? h('div', { class: 'row', style: 'margin-bottom:10px' }, h('button', { class: 'btn', onclick: createTransfer }, '+ Phiếu chuyển kho')) : null,
+    h('div', { class: 'card' }, h('h3', {}, 'Phiếu chuyển kho'), table(['Mã', 'Ngày', 'Từ', 'Đến', 'Hàng', 'Trạng thái', ''], list.map(r => [r.code, vnTime(r.created_at), oname(r.from_outlet), oname(r.to_outlet),
+      r.transfer_items.map(i => pname(i.product_id) + ' ×' + i.qty + ' (' + (i.batches || {}).code + ')').join(', '),
+      badge(r.status === 'in_transit' ? 'Đang chuyển' : r.status === 'received' ? 'Đã nhận' : r.status, r.status === 'received' ? 'ok' : 'warn'),
+      r.status === 'in_transit' && (is('ADMIN', 'OPERATIONS_MANAGER') || (is('OUTLET_MANAGER', 'OUTLET_STAFF') && S.mine.includes(r.to_outlet))) ?
+        h('button', { class: 'btn sm', onclick: async () => { if (!await confirmBox('Xác nhận đã nhận đủ hàng của phiếu ' + r.code + '?')) return; try { await rpc('receive_transfer', { p_transfer: r.id }); toast('Đã nhận hàng'); go('recv'); } catch (e) { fail(e); } } }, 'Nhận hàng') : null]))));
+}
+async function createTransfer() {
+  const outs = S.outlets.map(o => [o.id, o.name]), prods = [['', '— chọn SKU —'], ...S.products.map(p => [p.id, p.id + ' — ' + p.name])];
+  const wh = (S.outlets.find(o => o.kind === 'warehouse') || {}).id, st = (stores()[0] || {}).id;
+  const v = await dialog('Phiếu chuyển kho', [{ k: 'f', l: 'Từ', opts: outs, val: wh }, { k: 't', l: 'Đến', opts: outs, val: st },
+    { k: 'p1', l: 'SKU 1', opts: prods }, { k: 'q1', l: 'Số lượng 1', type: 'number' }, { k: 'p2', l: 'SKU 2', opts: prods }, { k: 'q2', l: 'Số lượng 2', type: 'number' }, { k: 'p3', l: 'SKU 3', opts: prods }, { k: 'q3', l: 'Số lượng 3', type: 'number' }], 'Tạo phiếu');
+  if (!v) return; const items = [1, 2, 3].filter(i => v['p' + i] && v['q' + i] > 0).map(i => ({ product_id: v['p' + i], qty: v['q' + i] }));
+  if (!items.length) return toast('Chưa có dòng hàng nào', true);
+  try { await rpc('create_transfer', { p_from: v.f, p_to: v.t, p_items: items }); toast('Đã tạo phiếu chuyển'); go('recv'); } catch (e) { fail(e); }
+}
+
+async function dashView() {
+  const d0 = addDays(-6), t = vnDate();
+  const [days, profit, voids, shifts, stock] = await Promise.all([
+    q(sb.from('outlet_daily_sales').select('*').gte('day', d0)), q(sb.from('outlet_daily_profit').select('*').gte('day', d0)).catch(() => []),
+    q(sb.from('retail_sales').select('id,outlet_id').eq('status', 'void_requested')), q(sb.from('shifts').select('outlet_id').is('closed_at', null)),
+    q(sb.from('stock_on_hand').select('outlet_id,product_id,expires_on,qc_status,locked,qty'))]);
+  const sl = stores().filter(o => is('OUTLET_MANAGER') ? S.mine.includes(o.id) : true), g = (o, d) => days.find(x => x.outlet_id === o && x.day === d) || {};
+  const near = stock.filter(x => x.qc_status === 'PASS' && !x.locked && x.expires_on <= addDays(2) && x.expires_on >= t);
+  const cards = sl.map(o => { const x = g(o.id, t); return h('div', { class: 'card' }, h('h3', {}, o.name, ' ', shifts.some(s => s.outlet_id === o.id) ? badge('Đang mở ca', 'ok') : badge('Chưa mở ca', 'mut')),
+    h('div', { class: 'grid' }, [['Doanh thu hôm nay', fm(x.revenue)], ['Số hóa đơn', x.invoices || 0], ['Tiền mặt', fm(x.cash)], ['Chuyển khoản + QR', fm((+x.transfer || 0) + (+x.qr || 0))]].map(k => h('div', { class: 'kpi' }, h('span', {}, k[0]), h('b', {}, k[1])))),
+    h('div', { style: 'margin-top:8px;color:var(--mut)' }, 'Chờ duyệt hủy: ' + voids.filter(v => v.outlet_id === o.id).length + ' · Lô cận hạn (≤ 2 ngày): ' + near.filter(n => n.outlet_id === o.id).length)); });
+  const dates = [...Array(7)].map((_, i) => addDays(-i));
+  return h('div', {}, cards.length ? cards : h('div', { class: 'empty' }, 'Chưa có điểm bán nào'),
+    h('div', { class: 'card' }, h('h3', {}, 'Doanh thu 7 ngày gần nhất'), table(['Ngày', ...sl.map(o => o.name), 'Tổng', ...(profit.length ? ['Lãi gộp'] : [])],
+      dates.map(d => [d, ...sl.map(o => fm(g(o.id, d).revenue)), h('b', {}, fm(sl.reduce((a, o) => a + (+g(o.id, d).revenue || 0), 0))),
+        ...(profit.length ? [fm(profit.filter(p => p.day === d).reduce((a, p) => a + (+p.gross_profit || 0), 0))] : [])]))));
+}
+
+async function batchView() {
+  const rows = await q(sb.from('batches').select('*').order('made_on', { ascending: false }).limit(60));
+  const canMake = is('ADMIN', 'OPERATIONS_MANAGER', 'PRODUCTION'), canRel = is('ADMIN', 'OPERATIONS_MANAGER', 'QC');
+  const act = (fn, a, msg) => async () => { try { await rpc(fn, a); toast(msg); go('batch'); } catch (e) { fail(e); } };
+  return h('div', {}, canMake ? h('div', { class: 'row', style: 'margin-bottom:10px' }, h('button', { class: 'btn', onclick: async () => {
+    const v = await dialog('Tạo lô sản xuất', [{ k: 'p', l: 'SKU', opts: S.products.map(p => [p.id, p.id + ' — ' + p.name]) }, { k: 'pl', l: 'Kế hoạch (pack)', type: 'number' }, { k: 'q', l: 'Thực tế (pack)', type: 'number' }, { k: 'o', l: 'Người vận hành' }], 'Tạo lô');
+    if (!v) return; try { await rpc('create_batch', { p_product: v.p, p_planned: v.pl, p_produced: v.q, p_operator: v.o || null }); toast('Đã tạo lô'); go('batch'); } catch (e) { fail(e); } } }, '+ Lô sản xuất')) : null,
+    h('div', { class: 'card' }, table(['Lô', 'SKU', 'Sản xuất', 'Hạn dùng', 'KH / TT', 'QC', ''], rows.map(b => [b.code, pname(b.product_id), b.made_on, b.expires_on, (b.planned_qty ?? '—') + ' / ' + b.produced_qty,
+      b.locked ? badge('Khóa · ' + b.qc_status, 'bad') : badge(b.qc_status, b.qc_status === 'PASS' ? 'ok' : 'warn'),
+      h('div', { class: 'row' }, b.qc_status === 'DESTROYED' ? null : b.locked ? (canRel ? [h('button', { class: 'btn ghost sm', onclick: act('release_batch', { p_batch: b.id }, 'Đã xả lô') }, 'Xả lô'),
+        h('button', { class: 'btn red sm', onclick: async () => { if (await confirmBox('Tiêu hủy lô ' + b.code + '? Toàn bộ tồn của lô ở mọi điểm sẽ bị trừ.')) act('destroy_batch', { p_batch: b.id }, 'Đã tiêu hủy')(); } }, 'Tiêu hủy')] : null)
+        : (canRel || is('PRODUCTION') ? [h('button', { class: 'btn sm', onclick: act('set_batch_qc', { p_batch: b.id, p_status: 'PASS' }, 'QC đạt') }, 'Đạt'), h('button', { class: 'btn amber sm', onclick: act('set_batch_qc', { p_batch: b.id, p_status: 'HOLD' }, 'Giữ lô') }, 'Giữ'),
+          h('button', { class: 'btn red sm', onclick: act('set_batch_qc', { p_batch: b.id, p_status: 'FAIL' }, 'Lô bị khóa') }, 'Lỗi')] : null))]))));
+}
+
+const NEXT = { Draft: 'Confirmed', Confirmed: 'Production', Production: 'Ready', Ready: 'Out for Delivery', 'Out for Delivery': 'Delivered', Delivered: 'Completed' };
+async function ordersView() {
+  const rows = await q(sb.from('orders').select('id,code,status,order_date,fefo_note,driver,delivered_temp,failed,customers(name),order_items(qty,product_id,order_item_prices(unit_price))').order('created_at', { ascending: false }).limit(60));
+  const canMake = is('ADMIN', 'OPERATIONS_MANAGER', 'SALES_MANAGER', 'SALES'), canDel = is('ADMIN', 'OPERATIONS_MANAGER', 'WAREHOUSE');
+  const tot = r => { let s = 0, ok = true; r.order_items.forEach(i => { const p = Array.isArray(i.order_item_prices) ? i.order_item_prices[0] : i.order_item_prices; if (!p) ok = false; else s += p.unit_price * i.qty; }); return ok ? fm(s) : '—'; };
+  const run = (fn, a, msg) => async () => { try { await rpc(fn, a); toast(msg); go('orders'); } catch (e) { fail(e); } };
+  return h('div', {}, canMake ? h('div', { class: 'row', style: 'margin-bottom:10px' }, h('button', { class: 'btn', onclick: newOrder }, '+ Đơn hàng B2B')) : null,
+    h('div', { class: 'card' }, table(['Mã', 'Khách hàng', 'Hàng', 'Tổng', 'Ngày', 'Trạng thái', 'Giao hàng / lô xuất', ''], rows.map(r => [r.code, (r.customers || {}).name, r.order_items.map(i => pname(i.product_id) + ' ×' + i.qty).join(', '), tot(r), r.order_date,
+      r.failed ? badge('Giao thất bại', 'bad') : badge(r.status, r.status === 'Cancelled' ? 'bad' : ['Delivered', 'Completed'].includes(r.status) ? 'ok' : 'info'),
+      h('div', { style: 'font-size:12px;color:var(--mut)' }, [r.driver ? 'Tài xế: ' + r.driver : '', r.delivered_temp != null ? ' · ' + r.delivered_temp + '°C' : '', r.fefo_note ? h('div', {}, r.fefo_note) : null]),
+      h('div', { class: 'row' }, NEXT[r.status] && !r.failed ? h('button', { class: 'btn sm', onclick: run('advance_order', { p_order: r.id }, '→ ' + NEXT[r.status]) }, '→ ' + NEXT[r.status]) : null,
+        ['Draft', 'Confirmed'].includes(r.status) && canMake ? h('button', { class: 'btn ghost sm', onclick: async () => { if (await confirmBox('Hủy đơn ' + r.code + '?')) run('cancel_order', { p_order: r.id }, 'Đã hủy đơn')(); } }, 'Hủy') : null,
+        r.status === 'Out for Delivery' && canDel ? [h('button', { class: 'btn ghost sm', onclick: async () => { const v = await dialog('Giao hàng ' + r.code, [{ k: 'd', l: 'Tài xế', val: r.driver || '' }, { k: 't', l: 'Giờ giao' }, { k: 'c', l: 'Nhiệt độ thùng (°C)', type: 'number', val: r.delivered_temp }, { k: 's', l: 'Người ký nhận' }]); if (!v) return; run('update_delivery', { p_order: r.id, p_driver: v.d, p_time: v.t, p_temp: v.c, p_signature: v.s }, 'Đã cập nhật giao hàng')(); } }, 'Cập nhật'),
+          h('button', { class: 'btn red sm', onclick: run('set_delivery_failed', { p_order: r.id, p_failed: !r.failed }, 'Đã đổi trạng thái') }, r.failed ? 'Giao lại' : 'Thất bại')] : null)]))));
+}
+async function newOrder() {
+  const cs = await q(sb.from('customers').select('id,name').order('name')); if (!cs.length) return toast('Chưa có khách hàng nào', true);
+  const prods = [['', '— chọn SKU —'], ...S.products.map(p => [p.id, p.id + ' — ' + p.name])];
+  const v = await dialog('Đơn hàng B2B', [{ k: 'c', l: 'Khách hàng', opts: cs.map(c => [c.id, c.name]) }, { k: 'p1', l: 'SKU 1', opts: prods }, { k: 'q1', l: 'Số lượng 1', type: 'number' }, { k: 'p2', l: 'SKU 2', opts: prods }, { k: 'q2', l: 'Số lượng 2', type: 'number' }], 'Tạo đơn');
+  if (!v) return; const items = [1, 2].filter(i => v['p' + i] && v['q' + i] > 0).map(i => ({ product_id: v['p' + i], qty: v['q' + i] }));
+  if (!items.length) return toast('Chưa có dòng hàng nào', true);
+  try { await rpc('create_b2b_order', { p_customer: v.c, p_items: items }); toast('Đã tạo đơn (Draft)'); go('orders'); } catch (e) { fail(e); }
+}
+
+async function custView() {
+  const rows = await q(sb.from('customers').select('id,code,name,venue,stage,price_tier,pay_terms,salesperson,phone,customer_finance(credit_limit,balance)').order('name'));
+  const fin = c => Array.isArray(c.customer_finance) ? c.customer_finance[0] : c.customer_finance;
+  const canEdit = is('ADMIN', 'OPERATIONS_MANAGER', 'SALES_MANAGER', 'SALES'), canPay = is('ADMIN', 'OPERATIONS_MANAGER', 'FINANCE');
+  const F = [{ k: 'name', l: 'Tên khách hàng' }, { k: 'venue', l: 'Loại hình', opts: ['Karaoke', 'Beer Club', 'Pub', 'Lounge', 'Bar', 'Restaurant', 'Café', 'Distributor', 'Event/Catering'].map(x => [x, x]) },
+    { k: 'price_tier', l: 'Bảng giá', opts: [['Standard', 'Standard'], ['VIP', 'VIP']] }, { k: 'pay_terms', l: 'Thanh toán', opts: ['COD', 'NET15', 'NET30'].map(x => [x, x]) }, { k: 'salesperson', l: 'Sales phụ trách' }, { k: 'phone', l: 'Điện thoại' }];
+  const edit = async c => { const v = await dialog(c ? 'Sửa khách hàng' : 'Thêm khách hàng', F.map(f => ({ ...f, val: c ? c[f.k] : undefined })), 'Lưu'); if (!v) return; if (!v.name) return toast('Nhập tên khách hàng', true);
+    try { c ? await q(sb.from('customers').update(v).eq('id', c.id)) : await q(sb.from('customers').insert(v)); toast('Đã lưu'); go('cust'); } catch (e) { fail(e); } };
+  return h('div', {}, canEdit ? h('div', { class: 'row', style: 'margin-bottom:10px' }, h('button', { class: 'btn', onclick: () => edit(null) }, '+ Khách hàng')) : null,
+    h('div', { class: 'card' }, table(['Mã', 'Khách hàng', 'Loại hình', 'Bảng giá', 'Thanh toán', 'Hạn mức', 'Dư nợ', ''], rows.map(c => { const f = fin(c); return [c.code, h('b', {}, c.name), c.venue, c.price_tier, c.pay_terms, f ? fm(f.credit_limit) : '—',
+      f ? h('span', { style: f.balance > f.credit_limit * .8 && f.credit_limit > 0 ? 'color:var(--bad);font-weight:600' : '' }, fm(f.balance)) : '—',
+      h('div', { class: 'row' }, canEdit ? h('button', { class: 'btn ghost sm', onclick: () => edit(c) }, 'Sửa') : null,
+        canPay && f && f.balance > 0 ? h('button', { class: 'btn sm', onclick: async () => { const v = await dialog('Ghi nhận thu tiền — ' + c.name, [{ k: 'a', l: 'Số tiền thu (đ)', type: 'number', val: f.balance }], 'Ghi nhận'); if (!v) return; try { await rpc('record_payment', { p_customer: c.id, p_amount: v.a }); toast('Đã ghi nhận'); go('cust'); } catch (e) { fail(e); } } }, 'Thu tiền') : null,
+        is('ADMIN') && f ? h('button', { class: 'btn ghost sm', onclick: async () => { const v = await dialog('Hạn mức công nợ — ' + c.name, [{ k: 'l', l: 'Hạn mức (đ)', type: 'number', val: f.credit_limit }]); if (!v || v.l == null) return; try { await q(sb.from('customer_finance').update({ credit_limit: v.l }).eq('customer_id', c.id)); toast('Đã lưu'); go('cust'); } catch (e) { fail(e); } } }, 'Hạn mức') : null)]; }))));
+}
+
+async function auditView() {
+  const rows = await q(sb.from('audit_log').select('*').order('id', { ascending: false }).limit(200));
+  return h('div', { class: 'card' }, h('h3', {}, '200 thao tác gần nhất'), table(['Thời gian', 'Người dùng', 'Hành động', 'Bảng', 'Mã bản ghi', 'Thay đổi'], rows.map(a => {
+    let ch = ''; if (a.action === 'UPDATE' && a.old_data && a.new_data) ch = Object.keys(a.new_data).filter(k => JSON.stringify(a.new_data[k]) !== JSON.stringify(a.old_data[k])).map(k => k + ': ' + JSON.stringify(a.old_data[k]) + ' → ' + JSON.stringify(a.new_data[k])).join('; ');
+    return [vnTime(a.at), a.user_email || 'hệ thống', badge(a.action, a.action === 'DELETE' ? 'bad' : a.action === 'INSERT' ? 'ok' : 'warn'), a.table_name, (a.row_id || '').slice(0, 8), h('span', { style: 'font-size:12px' }, ch.slice(0, 220))];
+  })));
+}
+const VIEWS = { dash: dashView, pos: posView, sales: salesView, shift: shiftView, stock: stockView, recv: recvView, batch: batchView, orders: ordersView, cust: custView, audit: auditView };
+
+/* ============ KHỞI ĐỘNG ============ */
+sb.auth.onAuthStateChange((ev, session) => {
+  if (ev === 'SIGNED_OUT' || !session) { S.prof = null; if (chan) { sb.removeChannel(chan); chan = null; } loginView(); }
+  else if (ev === 'SIGNED_IN' && !(S.prof && S.prof.id === session.user.id)) setTimeout(() => boot(session.user), 0);
+});
+sb.auth.getSession().then(({ data }) => { if (!data.session) loginView(); });
+</script></body></html>
