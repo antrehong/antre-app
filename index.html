@@ -568,6 +568,50 @@ async function recipeView() {
     safe(q(sb.from('material_costs').select('*'))), safe(q(sb.from('product_costs').select('*'))), safe(q(sb.from('product_prices').select('*')))]);
   const canEdit = is('ADMIN', 'OPERATIONS_MANAGER'), showCost = is('ADMIN', 'OPERATIONS_MANAGER', 'FINANCE');
   const mat = id => mats.find(m => m.id === id) || {}, avg = id => +((costs.find(c => c.material_id === id) || {}).avg_cost || 0);
+
+  // === ĐOẠN CODE MỚI CẦN THÊM VÀO NGAY ĐÂY ===
+  const addNewProduct = async () => {
+    const v = await dialog('Thêm mặt hàng (thành phẩm) mới', [
+      { k: 'id', l: 'Mã SKU (VD: TR-002)' },
+      { k: 'name', l: 'Tên thành phẩm' },
+      { k: 'category', l: 'Phân loại (VD: do_an)' },
+      { k: 'unit', l: 'Đơn vị tính (VD: pack)', val: 'pack' },
+      { k: 'shelf_days', l: 'Số ngày hạn sử dụng', type: 'number', val: 30 },
+      { k: 'retail_price', l: 'Giá bán lẻ (đ)', type: 'number', val: 0 },
+      { k: 'b2b_price', l: 'Giá bán sỉ B2B (đ)', type: 'number', val: 0 }
+    ], 'Thêm mặt hàng');
+    if (!v || !v.id || !v.name) return;
+    try {
+      await rpc('add_product', {
+        p_id: v.id,
+        p_name: v.name,
+        p_category: v.category || 'do_an',
+        p_unit: v.unit || 'pack',
+        p_shelf_days: v.shelf_days || 30,
+        p_retail_price: v.retail_price || 0,
+        p_b2b_price: v.b2b_price || 0
+      });
+      toast('Đã thêm thành phẩm mới thành công!');
+      const prods = await q(sb.from('products').select('id,name,retail_price,active').order('id'));
+      S.products = prods;
+      go('recipe');
+    } catch (e) { fail(e); }
+  };
+  // ===========================================
+
+  const addLine = async p => { ... };
+  // ... các hàm xử lý công thức hiện có ...
+
+  return h('div', {}, 
+    // === CHÈN NÚT BẤM GIAO DIỆN VÀO ĐÂY ===
+    canEdit ? h('div', { class: 'row', style: 'margin-bottom:12px' }, h('button', { class: 'btn', onclick: addNewProduct }, '+ Thêm mặt hàng mới')) : null,
+    // ======================================
+    
+    S.products.map(p => {
+      // Phần render danh sách sản phẩm hiện tại của bạn giữ nguyên ở đây...
+    })
+  );
+}
   const addLine = async p => {
     const v = await dialog('Thêm vào công thức ' + p.id, [{ k: 'm', l: 'Nguyên liệu / bao bì', opts: mats.map(m => [m.id, m.name + ' (' + m.unit + ')']) }, { k: 'q', l: 'Lượng cho 1 pack (theo đơn vị của nguyên liệu)', type: 'number' }]); if (!v) return;
     try { await q(sb.from('recipes').insert({ product_id: p.id, material_id: v.m, qty_per_pack: v.q })); toast('Đã thêm'); go('recipe'); } catch (e) { fail(e); }
