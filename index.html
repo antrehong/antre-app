@@ -55,6 +55,19 @@ td{padding:8px 10px 8px 0;border-bottom:1px solid #f1f5f9;vertical-align:middle}
 .side .gh{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:#94a3b8;padding:14px 16px 6px;display:flex;justify-content:space-between;align-items:center}
 .side .gh:hover{background:none;color:#e2e8f0}
 .side .ng button:not(.gh){padding-left:26px}
+
+.ag-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;margin-bottom:12px}
+.ag{border:1px solid var(--line);border-radius:12px;padding:12px;background:var(--card,#fff);position:relative;overflow:hidden}
+.ag .hd{display:flex;align-items:center;gap:8px;font-weight:600}
+.ag .dot{width:10px;height:10px;border-radius:50%;background:#94a3b8;flex:none}
+.ag.run .dot{background:#3b82f6;animation:agp 1s infinite}.ag.ok .dot{background:#16a34a}.ag.warn .dot{background:#f59e0b}.ag.bad .dot{background:#dc2626}
+.ag .bar{height:3px;background:var(--line);border-radius:3px;margin:8px 0;overflow:hidden}.ag .bar i{display:block;height:100%;width:0;background:#3b82f6}
+.ag.run .bar i{animation:agb 1.1s ease-in-out infinite}.ag.ok .bar i,.ag.warn .bar i,.ag.bad .bar i{width:100%;animation:none}.ag.ok .bar i{background:#16a34a}.ag.warn .bar i{background:#f59e0b}.ag.bad .bar i{background:#dc2626}
+.ag .sum{font-size:13px;color:var(--mut)}.ag ul{margin:6px 0 0;padding-left:18px;font-size:13px}
+.aglog{background:#0f172a;color:#cbd5e1;border-radius:10px;padding:10px 12px;font:12px/1.6 ui-monospace,Menlo,Consolas,monospace;max-height:220px;overflow:auto}
+.aglog .tm{color:#64748b}.aglog .w{color:#fbbf24}.aglog .b{color:#f87171}.aglog .o{color:#4ade80}
+@keyframes agp{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(1.5)}}
+@keyframes agb{0%{width:0;margin-left:0}50%{width:60%;margin-left:20%}100%{width:0;margin-left:100%}}
 </style></head>
 <body><div id="app"></div><div id="toast"></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
@@ -134,6 +147,7 @@ const MODS = [
   ['mat',   'Kho nguyên liệu',    ['ADMIN', 'OPERATIONS_MANAGER', 'PRODUCTION', 'WAREHOUSE']],
   ['recipe','Công thức & giá vốn', ['ADMIN', 'OPERATIONS_MANAGER', 'PRODUCTION', 'FINANCE']],
   ['omat',  'Nguyên liệu tại điểm bán', ['ADMIN', 'OPERATIONS_MANAGER', 'WAREHOUSE', 'PRODUCTION', 'FINANCE', 'OUTLET_MANAGER', 'OUTLET_STAFF']],
+  ['agent', 'Trợ lý giám sát',    ['ADMIN']],
   ['po',    'Mua hàng & NCC',     ['ADMIN', 'OPERATIONS_MANAGER', 'FINANCE']],
   ['orders','Đơn hàng B2B',       ['ADMIN', 'OPERATIONS_MANAGER', 'SALES_MANAGER', 'SALES', 'PRODUCTION', 'WAREHOUSE', 'QC', 'FINANCE']],
   ['deliv', 'Điều phối giao hàng', ['ADMIN', 'OPERATIONS_MANAGER', 'WAREHOUSE', 'SALES_MANAGER']],
@@ -151,7 +165,7 @@ const GROUPS = [
   ['2 · Làm thành phẩm',           ['po', 'mat', 'omat', 'recipe', 'batch', 'menu']],
   ['3 · Bán hàng B2B',             ['orders', 'deliv', 'cust']],
   ['4 · Công việc & Marketing',    ['tasks', 'trade']],
-  ['5 · Quản trị',                 ['rep', 'admin', 'audit']]
+  ['5 · Quản trị',                 ['agent', 'rep', 'admin', 'audit']]
 ];
 const needsOutlet = m => ['pos', 'shift', 'recv'].includes(m);
 
@@ -237,7 +251,7 @@ async function go(mod, quiet) {
   const view = $('#view'); if (!quiet) view.replaceChildren(h('div', { class: 'empty' }, 'Đang tải…'));
   try { const node = await VIEWS[mod](); if (my === seq) view.replaceChildren(node); } catch (e) { fail(e); if (my === seq && !quiet) view.replaceChildren(h('div', { class: 'empty' }, 'Không tải được: ' + e.message)); }
 }
-const refresh = () => { if (!S.prof || document.querySelector('.modal') || S.mod === 'pos') return; const a = document.activeElement; if (a && ['INPUT', 'SELECT'].includes(a.tagName)) return; go(S.mod, true); };
+const refresh = () => { if (!S.prof || document.querySelector('.modal') || ['pos', 'agent'].includes(S.mod)) return; const a = document.activeElement; if (a && ['INPUT', 'SELECT'].includes(a.tagName)) return; go(S.mod, true); };
 
 /* ============ THÔNG BÁO & REALTIME ============ */
 async function loadNotifs() {
@@ -443,7 +457,7 @@ async function auditView() {
 const STAGES = ['Lead', 'Contacted', 'Qualified', 'Sample Sent', 'Trial', 'First Order', 'Repeat Customer', 'Key Account', 'Inactive'];
 const KIND_VI = { ingredient: 'Nguyên liệu', packaging: 'Bao bì' };
 const MV_VI = { purchase_in: 'Nhập mua', production_out: 'Xuất sản xuất', adjust: 'Điều chỉnh', waste: 'Hao hụt', opening: 'Tồn đầu kỳ' };
-const NOOUTLET = ['admin', 'menu', 'dash', 'orders', 'cust', 'batch', 'audit', 'mat', 'recipe', 'po', 'deliv', 'trade', 'tasks', 'rep'];
+const NOOUTLET = ['agent', 'admin', 'menu', 'dash', 'orders', 'cust', 'batch', 'audit', 'mat', 'recipe', 'po', 'deliv', 'trade', 'tasks', 'rep'];
 const SALES_ROLES = ['ADMIN', 'OPERATIONS_MANAGER', 'SALES_MANAGER', 'SALES'];
 // Cập nhật/xóa qua RLS không báo lỗi khi bị từ chối (0 dòng) → tự kiểm tra để không báo "đã lưu" giả
 const mut = async p => { const d = await q(p.select('id')); if (!d || !d.length) throw new Error('Không có quyền hoặc không có bản ghi nào được thay đổi'); return d; };
@@ -649,6 +663,68 @@ async function omatView() {
         canSend ? h('button', { class: 'btn sm', onclick: () => send(m) }, 'Giao') : null]))),
     h('div', { class: 'card' }, h('h3', {}, 'Biến động gần đây'), table(['Thời gian', 'Nguyên liệu', 'Loại', 'Số lượng', 'Ghi chú'], mv.map(x => { const m = mats.find(y => y.id === x.material_id) || {};
       return [vnTime(x.created_at), m.name || '—', KV[x.kind] || x.kind, h('span', { style: 'color:' + (x.qty < 0 ? 'var(--bad)' : 'var(--ok)') }, (x.qty > 0 ? '+' : '') + x.qty + ' ' + (m.unit || '')), x.note || '']; }))));
+}
+
+
+/* ---------- Trợ lý giám sát: các "tác tử" kiểm tra DỮ LIỆU THẬT theo quy tắc cố định (không phải mô hình AI) ---------- */
+async function agentView() {
+  const todayStart = vnDate() + 'T00:00:00+07:00', d7 = new Date(Date.now() - 7 * 864e5).toISOString(), soon = new Date(Date.now() + 2 * 864e5 + 7 * 36e5).toISOString().slice(0, 10);
+  const oN = id => oname(id), lvl = n => n ? 'warn' : 'ok';
+  const AG = [
+    ['Kho nguyên liệu', 'Nguyên liệu dưới mức tối thiểu', async () => {
+      const [m, st] = await Promise.all([q(sb.from('materials').select('id,name,unit,min_stock').eq('active', true)), q(sb.from('material_stock').select('material_id,qty'))]);
+      const low = m.filter(x => +x.min_stock > 0 && +((st.find(y => y.material_id === x.id) || {}).qty || 0) <= +x.min_stock);
+      return { lv: lvl(low.length), sum: low.length ? low.length + ' nguyên liệu sắp hết' : 'Tồn đủ trên mức tối thiểu', items: low.map(x => x.name + ': còn ' + +((st.find(y => y.material_id === x.id) || {}).qty || 0) + ' ' + x.unit) };
+    }],
+    ['Thành phẩm', 'Lô sắp hết hạn (≤ 2 ngày) còn tồn', async () => {
+      const r = await q(sb.from('stock_on_hand').select('outlet_id,product_id,batch_code,expires_on,qty').gt('qty', 0).lte('expires_on', soon).limit(200));
+      return { lv: r.length ? 'bad' : 'ok', sum: r.length ? r.length + ' lô sắp/đã hết hạn' : 'Không có lô nào sắp hết hạn', items: r.slice(0, 8).map(x => pname(x.product_id) + ' (' + x.batch_code + ') tại ' + oN(x.outlet_id) + ': ' + x.qty + ', HSD ' + x.expires_on) };
+    }],
+    ['Công nợ NCC', 'Đơn mua quá hạn thanh toán', async () => {
+      const r = await q(sb.from('po_balance').select('code,remaining,due_date').eq('overdue', true).limit(200));
+      return { lv: r.length ? 'bad' : 'ok', sum: r.length ? r.length + ' đơn quá hạn, nợ ' + fm(r.reduce((a, x) => a + +x.remaining, 0)) : 'Không có đơn quá hạn', items: r.slice(0, 8).map(x => x.code + ': còn ' + fm(x.remaining) + ' (hạn ' + x.due_date + ')') };
+    }],
+    ['Công nợ khách B2B', 'Khách vượt hạn mức công nợ', async () => {
+      const r = await q(sb.from('customers').select('name,customer_finance(credit_limit,balance)').limit(1000));
+      const over = r.filter(x => { const f = Array.isArray(x.customer_finance) ? x.customer_finance[0] : x.customer_finance; return f && +f.credit_limit > 0 && +f.balance > +f.credit_limit; });
+      return { lv: over.length ? 'bad' : 'ok', sum: over.length ? over.length + ' khách vượt hạn mức' : 'Mọi khách trong hạn mức', items: over.slice(0, 8).map(x => { const f = Array.isArray(x.customer_finance) ? x.customer_finance[0] : x.customer_finance; return x.name + ': nợ ' + fm(f.balance) + ' / hạn mức ' + fm(f.credit_limit); }) };
+    }],
+    ['Ca bán', 'Ca mở quá 12 giờ chưa chốt', async () => {
+      const r = await q(sb.from('shifts').select('outlet_id,opened_at').is('closed_at', null));
+      const old = r.filter(x => Date.now() - new Date(x.opened_at) > 12 * 36e5);
+      return { lv: lvl(old.length), sum: old.length ? old.length + ' ca chưa chốt' : 'Không có ca treo', items: old.map(x => oN(x.outlet_id) + ': mở từ ' + vnTime(x.opened_at)) };
+    }],
+    ['Nguyên liệu điểm bán', 'Điểm còn nguyên liệu nhưng chưa chốt hôm nay', async () => {
+      const [stk, done] = await Promise.all([q(sb.from('outlet_material_stock').select('outlet_id,qty').gt('qty', 0)), q(sb.from('outlet_material_movements').select('outlet_id').in('kind', ['count_adjust', 'return_out']).gte('created_at', todayStart))]);
+      const doneSet = new Set(done.map(x => x.outlet_id)), pend = [...new Set(stk.map(x => x.outlet_id))].filter(o => !doneSet.has(o));
+      return { lv: lvl(pend.length), sum: pend.length ? pend.length + ' điểm chưa chốt nguyên liệu' : 'Các điểm có nguyên liệu đã chốt', items: pend.map(o => oN(o)) };
+    }],
+    ['Hao hụt 7 ngày', 'Thiếu hụt khi chốt nguyên liệu điểm bán', async () => {
+      const r = await q(sb.from('outlet_material_movements').select('outlet_id,material_id,qty,created_at').eq('kind', 'count_adjust').lt('qty', 0).gte('created_at', d7).limit(500));
+      const by = {}; r.forEach(x => by[x.outlet_id] = (by[x.outlet_id] || 0) + 1);
+      return { lv: r.length ? 'warn' : 'ok', sum: r.length ? r.length + ' lần thiếu hụt trong 7 ngày' : 'Không ghi nhận thiếu hụt', items: Object.entries(by).map(([o, n]) => oN(o) + ': ' + n + ' lần') };
+    }]];
+  const grid = h('div', { class: 'ag-grid' }), log = h('div', { class: 'aglog' }), btn = h('button', { class: 'btn', onclick: () => run() }, 'Chạy lại');
+  const nodes = AG.map(a => { const n = h('div', { class: 'ag' }, h('div', { class: 'hd' }, h('span', { class: 'dot' }), a[0]), h('div', { class: 'sum' }, a[1]), h('div', { class: 'bar' }, h('i', {})), h('div', { class: 'res sum' }, 'Đang chờ…')); grid.append(n); return n; });
+  const say = (t, c) => { log.append(h('div', {}, h('span', { class: 'tm' }, new Date().toLocaleTimeString('vi-VN') + ' '), h('span', { class: c || '' }, t))); log.scrollTop = log.scrollHeight; };
+  let running = false;
+  async function run() {
+    if (running) return; running = true; btn.disabled = true; log.replaceChildren(); say('Bắt đầu quét dữ liệu thật của hệ thống…'); let issues = 0;
+    nodes.forEach(n => { n.className = 'ag'; n.querySelector('.res').replaceChildren('Đang chờ…'); });
+    for (let i = 0; i < AG.length; i++) {
+      const n = nodes[i]; n.className = 'ag run'; n.querySelector('.res').textContent = 'Đang quét…'; say('[' + AG[i][0] + '] ' + AG[i][1] + '…');
+      let r; const t0 = Date.now();
+      try { r = await AG[i][2](); } catch (e) { r = { lv: 'warn', sum: 'Không đọc được dữ liệu (chưa chạy patch SQL tương ứng?)', items: [(e && e.message) || ''] }; }
+      const wait = 700 - (Date.now() - t0); if (wait > 0) await new Promise(f => setTimeout(f, wait));
+      n.className = 'ag ' + r.lv; n.querySelector('.res').replaceChildren(r.sum, r.items.length ? h('ul', {}, r.items.map(x => h('li', {}, x))) : '');
+      if (r.lv !== 'ok') issues++; say('  → ' + r.sum, r.lv === 'ok' ? 'o' : r.lv === 'bad' ? 'b' : 'w');
+    }
+    say(issues ? 'Hoàn tất: ' + issues + ' mục cần chú ý.' : 'Hoàn tất: không phát hiện vấn đề.', issues ? 'w' : 'o'); running = false; btn.disabled = false;
+  }
+  setTimeout(run, 50);
+  return h('div', {}, h('div', { class: 'card' }, h('h3', {}, 'Trợ lý giám sát'),
+    h('div', { style: 'color:var(--mut);margin-bottom:8px' }, 'Các tác tử bên dưới quét dữ liệu thật của app theo quy tắc cố định rồi báo kết quả. Đây không phải mô hình AI nên không tự quyết định hay tự sửa dữ liệu nào.'), h('div', { class: 'row' }, btn)),
+    grid, h('div', { class: 'card' }, h('h3', {}, 'Nhật ký hoạt động'), log));
 }
 
 /* ---------- Công thức (BOM) & giá vốn ---------- */
@@ -1005,7 +1081,7 @@ async function capacityCard(canEdit) {
       canEdit ? h('button', { class: 'btn ghost sm', onclick: () => setOne(c) }, 'Đặt ngưỡng') : null])));
 }
 
-const VIEWS = { admin: adminView, menu: menuView, dash: dashView, pos: posView, sales: salesView, shift: shiftView, stock: stockView, recv: recvView, batch: batchView, mat: matView, omat: omatView, recipe: recipeView, po: poView, orders: ordersView, deliv: delivView, cust: custView, trade: tradeView, tasks: tasksView, rep: repView, audit: auditView };
+const VIEWS = { admin: adminView, menu: menuView, dash: dashView, pos: posView, sales: salesView, shift: shiftView, stock: stockView, recv: recvView, batch: batchView, mat: matView, agent: agentView, omat: omatView, recipe: recipeView, po: poView, orders: ordersView, deliv: delivView, cust: custView, trade: tradeView, tasks: tasksView, rep: repView, audit: auditView };
 
 /* ============ KHỞI ĐỘNG ============ */
 sb.auth.onAuthStateChange((ev, session) => {
