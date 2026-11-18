@@ -68,6 +68,17 @@ td{padding:8px 10px 8px 0;border-bottom:1px solid #f1f5f9;vertical-align:middle}
 .aglog .tm{color:#64748b}.aglog .w{color:#fbbf24}.aglog .b{color:#f87171}.aglog .o{color:#4ade80}
 @keyframes agp{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(1.5)}}
 @keyframes agb{0%{width:0;margin-left:0}50%{width:60%;margin-left:20%}100%{width:0;margin-left:100%}}
+
+.lvbox{background:#0b1220;border-radius:14px;overflow:hidden;border:1px solid var(--line)}
+.lvbox canvas{display:block;width:100%;height:auto;image-rendering:pixelated}
+.lv-pop{font:700 19px system-ui,sans-serif;fill:#fde68a;paint-order:stroke;stroke:#0b1220;stroke-width:4px;animation:lvup 2.2s ease-out forwards}
+.lv-pulse{fill:none;stroke:#38bdf8;stroke-width:4;transform-box:fill-box;transform-origin:center;animation:lvpl 1s ease-out forwards}
+.lv-bob{animation:lvbob 2.4s ease-in-out infinite}
+.lvfeed{max-height:300px;overflow:auto;font-size:13px}.lvfeed div{padding:5px 0;border-bottom:1px solid var(--line)}
+.lvwrap{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:12px}@media(max-width:900px){.lvwrap{grid-template-columns:1fr}}
+@keyframes lvup{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(-34px)}}
+@keyframes lvpl{from{opacity:.9;transform:scale(1)}to{opacity:0;transform:scale(2.4)}}
+@keyframes lvbob{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
 </style></head>
 <body><div id="app"></div><div id="toast"></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
@@ -148,6 +159,7 @@ const MODS = [
   ['recipe','Công thức & giá vốn', ['ADMIN', 'OPERATIONS_MANAGER', 'PRODUCTION', 'FINANCE']],
   ['omat',  'Nguyên liệu tại điểm bán', ['ADMIN', 'OPERATIONS_MANAGER', 'WAREHOUSE', 'PRODUCTION', 'FINANCE', 'OUTLET_MANAGER', 'OUTLET_STAFF']],
   ['agent', 'Trợ lý giám sát',    ['ADMIN']],
+  ['live',  'Bản đồ hoạt động',   ['ADMIN', 'OPERATIONS_MANAGER']],
   ['po',    'Mua hàng & NCC',     ['ADMIN', 'OPERATIONS_MANAGER', 'FINANCE']],
   ['orders','Đơn hàng B2B',       ['ADMIN', 'OPERATIONS_MANAGER', 'SALES_MANAGER', 'SALES', 'PRODUCTION', 'WAREHOUSE', 'QC', 'FINANCE']],
   ['deliv', 'Điều phối giao hàng', ['ADMIN', 'OPERATIONS_MANAGER', 'WAREHOUSE', 'SALES_MANAGER']],
@@ -165,7 +177,7 @@ const GROUPS = [
   ['2 · Làm thành phẩm',           ['po', 'mat', 'omat', 'recipe', 'batch', 'menu']],
   ['3 · Bán hàng B2B',             ['orders', 'deliv', 'cust']],
   ['4 · Công việc & Marketing',    ['tasks', 'trade']],
-  ['5 · Quản trị',                 ['agent', 'rep', 'admin', 'audit']]
+  ['5 · Quản trị',                 ['live', 'agent', 'rep', 'admin', 'audit']]
 ];
 const needsOutlet = m => ['pos', 'shift', 'recv'].includes(m);
 
@@ -251,7 +263,7 @@ async function go(mod, quiet) {
   const view = $('#view'); if (!quiet) view.replaceChildren(h('div', { class: 'empty' }, 'Đang tải…'));
   try { const node = await VIEWS[mod](); if (my === seq) view.replaceChildren(node); } catch (e) { fail(e); if (my === seq && !quiet) view.replaceChildren(h('div', { class: 'empty' }, 'Không tải được: ' + e.message)); }
 }
-const refresh = () => { if (!S.prof || document.querySelector('.modal') || ['pos', 'agent'].includes(S.mod)) return; const a = document.activeElement; if (a && ['INPUT', 'SELECT'].includes(a.tagName)) return; go(S.mod, true); };
+const refresh = () => { if (!S.prof || document.querySelector('.modal') || ['pos', 'agent', 'live'].includes(S.mod)) return; const a = document.activeElement; if (a && ['INPUT', 'SELECT'].includes(a.tagName)) return; go(S.mod, true); };
 
 /* ============ THÔNG BÁO & REALTIME ============ */
 async function loadNotifs() {
@@ -270,7 +282,7 @@ let chan = null;
 function subscribe() {
   if (chan) sb.removeChannel(chan); let t;
   chan = sb.channel('live');
-  ['retail_sales', 'stock_movements', 'notifications', 'orders', 'shifts', 'products', 'material_movements', 'purchase_orders'].forEach(tb => chan.on('postgres_changes', { event: '*', schema: 'public', table: tb }, () => {
+  ['retail_sales', 'stock_movements', 'notifications', 'orders', 'shifts', 'products', 'material_movements', 'purchase_orders', 'outlet_material_movements'].forEach(tb => chan.on('postgres_changes', { event: '*', schema: 'public', table: tb }, () => {
     clearTimeout(t); t = setTimeout(async () => { if (tb === 'products') { await loadProducts().catch(() => {}); if (S.mod === 'pos' && window.__posRedraw) { window.__posRedraw(); toast('Thực đơn vừa được cập nhật'); } } refresh(); if (tb === 'notifications') { const before = (S.notifs[0] || {}).id || 0; await loadNotifs(); const n = S.notifs[0]; if (n && n.id > before && S._nr) toast(n.message, /sắp hết|thiếu/i.test(n.message)); } }, 700);
   }));
   chan.subscribe();
@@ -457,7 +469,7 @@ async function auditView() {
 const STAGES = ['Lead', 'Contacted', 'Qualified', 'Sample Sent', 'Trial', 'First Order', 'Repeat Customer', 'Key Account', 'Inactive'];
 const KIND_VI = { ingredient: 'Nguyên liệu', packaging: 'Bao bì' };
 const MV_VI = { purchase_in: 'Nhập mua', production_out: 'Xuất sản xuất', adjust: 'Điều chỉnh', waste: 'Hao hụt', opening: 'Tồn đầu kỳ' };
-const NOOUTLET = ['agent', 'admin', 'menu', 'dash', 'orders', 'cust', 'batch', 'audit', 'mat', 'recipe', 'po', 'deliv', 'trade', 'tasks', 'rep'];
+const NOOUTLET = ['live', 'agent', 'admin', 'menu', 'dash', 'orders', 'cust', 'batch', 'audit', 'mat', 'recipe', 'po', 'deliv', 'trade', 'tasks', 'rep'];
 const SALES_ROLES = ['ADMIN', 'OPERATIONS_MANAGER', 'SALES_MANAGER', 'SALES'];
 // Cập nhật/xóa qua RLS không báo lỗi khi bị từ chối (0 dòng) → tự kiểm tra để không báo "đã lưu" giả
 const mut = async p => { const d = await q(p.select('id')); if (!d || !d.length) throw new Error('Không có quyền hoặc không có bản ghi nào được thay đổi'); return d; };
@@ -725,6 +737,118 @@ async function agentView() {
   return h('div', {}, h('div', { class: 'card' }, h('h3', {}, 'Trợ lý giám sát'),
     h('div', { style: 'color:var(--mut);margin-bottom:8px' }, 'Các tác tử bên dưới quét dữ liệu thật của app theo quy tắc cố định rồi báo kết quả. Đây không phải mô hình AI nên không tự quyết định hay tự sửa dữ liệu nào.'), h('div', { class: 'row' }, btn)),
     grid, h('div', { class: 'card' }, h('h3', {}, 'Nhật ký hoạt động'), log));
+}
+
+
+/* ---------- Bản đồ hoạt động thời gian thật (pixel): nhân vật chạy/bong bóng chữ = 1 sự kiện THẬT từ Supabase Realtime ---------- */
+async function liveView() {
+  const SC = 3, wh = S.outlets.find(o => o.kind === 'warehouse'), stores = S.outlets.filter(o => o.kind === 'store' && o.active !== false), N = Math.max(stores.length, 1);
+  const W = Math.max(320, N * 84), HH = 200;
+  const [mats, sales, ords] = await Promise.all([safe(q(sb.from('materials').select('id,name,unit'))),
+    safe(q(sb.from('retail_sales').select('outlet_id,total,status').gte('sold_at', vnDate() + 'T00:00:00+07:00').limit(2000))), safe(q(sb.from('orders').select('id').eq('order_date', vnDate()).limit(1000)))]);
+  const mname = id => (mats.find(m => m.id === id) || {}).name || 'nguyên liệu';
+  const cv = h('canvas', { width: W * SC, height: HH * SC }), g = cv.getContext('2d'); g.imageSmoothingEnabled = false;
+  const R = (c, x, y, w, hh) => { g.fillStyle = c; g.fillRect(Math.round(x * SC), Math.round(y * SC), Math.round(w * SC), Math.round(hh * SC)); };
+  const bg = document.createElement('canvas'); bg.width = W * SC; bg.height = HH * SC; const bgc = bg.getContext('2d');
+  const places = {};   // key -> {x0,x1,y0,y1,cx,doorY,inX,inY,name,kind}
+  const addTop = (k, x0, x1, name, kind) => places[k] = { x0, x1, y0: 12, y1: 80, cx: (x0 + x1) / 2, doorY: 80, inY: 66, name, kind };
+  addTop('ncc', 4, 92, 'Nhà cung cấp', 'ncc'); addTop('wh', W / 2 - 58, W / 2 + 58, wh ? wh.name : 'Kho trung tâm', 'wh'); addTop('b2b', W - 92, W - 4, 'Khách B2B', 'b2b');
+  const rw = (W - 8) / N; stores.forEach((o, i) => places[o.id] = { x0: 4 + i * rw, x1: 4 + (i + 1) * rw - 4, y0: 98, y1: HH - 4, cx: 4 + i * rw + (rw - 4) / 2, doorY: 98, inY: 150, name: o.name, kind: 'shop' });
+  const cnt = {}; sales.filter(x => x.status === 'completed' || !x.status).forEach(x => { const c = cnt[x.outlet_id] = cnt[x.outlet_id] || { n: 0, rev: 0 }; c.n++; c.rev += +x.total || 0; }); let b2bToday = ords.length;
+  /* --- nền tĩnh --- */
+  const FR = (c, x, y, w, hh) => { bgc.fillStyle = c; bgc.fillRect(Math.round(x * SC), Math.round(y * SC), Math.round(w * SC), Math.round(hh * SC)); };
+  FR('#17202f', 0, 0, W, HH); FR('#e6edf5', 0, 80, W, 18);
+  for (let x = 0; x < W; x += 16) FR('#dbe4ee', x, 88, 8, 2);
+  const room = (p, floor, alt) => { FR('#3b2f2a', p.x0 - 2, p.y0 - 2, p.x1 - p.x0 + 4, p.y1 - p.y0 + 4); FR(floor, p.x0, p.y0, p.x1 - p.x0, p.y1 - p.y0);
+    if (alt) for (let y = p.y0; y < p.y1; y += 8) for (let x = p.x0 + ((y / 8) % 2) * 8; x < p.x1; x += 16) FR(alt, x, y, 8, 8);
+    const dy = p.kind === 'shop' ? p.y0 - 2 : p.y1 - 2; FR(p.kind === 'shop' ? '#e6edf5' : '#e6edf5', p.cx - 9, dy, 18, 4); FR('#8a6a4a', p.cx - 9, dy, 2, 4); FR('#8a6a4a', p.cx + 7, dy, 2, 4); };
+  const shelf = (x, y, w) => { FR('#6b4a2b', x, y, w, 12); FR('#8a6338', x, y, w, 2); ['#e11d48', '#f59e0b', '#22c55e', '#3b82f6', '#a855f7'].forEach((c, i) => { for (let k = 0; k < Math.floor(w / 6); k++) { FR(c, x + 1 + k * 6, y + 3 + (i % 2) * 5, 4, 3); } }); FR('#4a3220', x, y + 12, w, 1); };
+  const box = (x, y, c) => { FR(c || '#c68a4b', x, y, 8, 7); FR('#a06a32', x, y + 3, 8, 1); FR('#e0b07a', x + 3, y, 2, 7); };
+  const plant = (x, y) => { FR('#7a4a2a', x, y + 5, 5, 4); FR('#16a34a', x - 1, y, 7, 6); FR('#22c55e', x + 1, y - 2, 3, 4); };
+  const desk = (x, y) => { FR('#7a4a2a', x, y, 20, 8); FR('#946238', x, y, 20, 2); FR('#334155', x + 6, y - 6, 8, 6); FR('#0b1220', x + 7, y - 5, 6, 4); FR('#64748b', x + 9, y, 2, 1); };
+  Object.entries(places).forEach(([k, p]) => {
+    if (p.kind === 'ncc') { room(p, '#8e99aa', '#9aa5b6'); for (let x = p.x0 + 4; x < p.x1 - 6; x += 10) FR('#facc15', x, p.y1 - 8, 6, 2);
+      FR('#2563eb', p.x0 + 8, p.y0 + 20, 34, 16); FR('#e2e8f0', p.x0 + 8, p.y0 + 14, 18, 8); FR('#0b1220', p.x0 + 12, p.y0 + 36, 6, 4); FR('#0b1220', p.x0 + 32, p.y0 + 36, 6, 4); FR('#93c5fd', p.x0 + 10, p.y0 + 16, 6, 4); box(p.x0 + 52, p.y0 + 30); box(p.x0 + 62, p.y0 + 30, '#b57a3c'); box(p.x0 + 57, p.y0 + 23); plant(p.x1 - 10, p.y0 + 6); }
+    else if (p.kind === 'wh') { room(p, '#b8823f', '#ad7737'); shelf(p.x0 + 4, p.y0 + 4, 30); shelf(p.x0 + 38, p.y0 + 4, 30); shelf(p.x0 + 72, p.y0 + 4, 34); box(p.x0 + 6, p.y0 + 34); box(p.x0 + 16, p.y0 + 34, '#b57a3c'); box(p.x0 + 11, p.y0 + 27); desk(p.x1 - 30, p.y0 + 30); FR('#475569', p.x0 + 40, p.y0 + 28, 18, 12); FR('#1f2937', p.x0 + 42, p.y0 + 30, 14, 4); plant(p.x1 - 8, p.y0 + 6); }
+    else if (p.kind === 'b2b') { room(p, '#cfd8e3', '#c1ccda'); FR('#7a4a2a', p.x0 + 14, p.y0 + 24, 44, 8); FR('#946238', p.x0 + 14, p.y0 + 24, 44, 2); FR('#334155', p.x0 + 30, p.y0 + 16, 10, 8); FR('#93c5fd', p.x0 + 31, p.y0 + 17, 8, 5); FR('#475569', p.x0 + 6, p.y0 + 4, 20, 10); FR('#e2e8f0', p.x0 + 8, p.y0 + 6, 16, 6); box(p.x1 - 22, p.y0 + 40); box(p.x1 - 12, p.y0 + 40, '#b57a3c'); plant(p.x1 - 10, p.y0 + 6); }
+    else { room(p, '#f4ead3', '#eadfc3'); FR('#7a4a2a', p.cx - 18, p.y0 + 40, 36, 9); FR('#a06a32', p.cx - 18, p.y0 + 40, 36, 2); FR('#475569', p.cx + 4, p.y0 + 33, 10, 7); FR('#22c55e', p.cx + 6, p.y0 + 35, 6, 2);
+      FR('#475569', p.x0 + 6, p.y0 + 10, 22, 14); FR('#1f2937', p.x0 + 8, p.y0 + 12, 18, 6); FR('#94a3b8', p.x0 + 6, p.y0 + 24, 22, 3); shelf(p.x1 - 34, p.y0 + 4, 30); plant(p.x1 - 8, p.y0 + 44); plant(p.x0 + 4, p.y1 - p.y0 - 10 + p.y0 - 14); }
+    bgc.fillStyle = '#0b1220'; const nm = p.name.length > 18 ? p.name.slice(0, 17) + '…' : p.name; bgc.font = 'bold ' + (4.2 * SC) + 'px system-ui,sans-serif'; const tw = bgc.measureText(nm).width + 10; bgc.fillRect(p.cx * SC - tw / 2, (p.y0 - 11) * SC, tw, 9 * SC); bgc.fillStyle = '#fff'; bgc.textAlign = 'center'; bgc.textBaseline = 'middle'; bgc.fillText(nm, p.cx * SC, (p.y0 - 6.5) * SC);
+  });
+  /* --- nhân vật --- */
+  const SKIN = ['#f1c9a0', '#e0a878', '#c68a5a', '#8d5a3a'], HAIR = ['#2b1d12', '#5b3a1e', '#111827', '#a16207', '#7f1d1d'], SHIRT = ['#3b82f6', '#ef4444', '#10b981', '#a855f7', '#f59e0b', '#0ea5e9'];
+  const pick = (a, i) => a[Math.abs(i) % a.length]; let uid = 0;
+  const person = (x, y, o) => Object.assign({ id: ++uid, x, y, skin: pick(SKIN, uid), hair: pick(HAIR, uid * 3), shirt: pick(SHIRT, uid * 2), step: [], moving: false, t: 0, say: null, carry: false, hat: null, sit: false, cook: 0 }, o);
+  const people = [];
+  const shopR = {}; // cư dân
+  Object.entries(places).forEach(([k, p]) => {
+    if (p.kind === 'shop') { const c = person(p.cx, p.y0 + 38, { shirt: '#ef4444', sit: false, role: 'cashier', home: [p.cx, p.y0 + 38] }), f = person(p.x0 + 17, p.y0 + 30, { shirt: '#f8fafc', hat: '#f8fafc', role: 'chef', home: [p.x0 + 17, p.y0 + 30], face: 1 }); people.push(c, f); shopR[k] = { cashier: c, chef: f }; }
+    else if (p.kind === 'wh') { const c = person(p.x1 - 20, p.y0 + 27, { shirt: '#0ea5e9', role: 'cashier', home: [p.x1 - 20, p.y0 + 27] }), f = person(p.x0 + 49, p.y0 + 40, { shirt: '#f8fafc', hat: '#f8fafc', role: 'chef', home: [p.x0 + 49, p.y0 + 40] }); people.push(c, f); shopR[k] = { cashier: c, chef: f }; }
+    else if (p.kind === 'ncc') { const d = person(p.x0 + 50, p.y0 + 44, { shirt: '#2563eb', hat: '#1d4ed8', role: 'cashier', home: [p.x0 + 50, p.y0 + 44] }); people.push(d); shopR[k] = { cashier: d }; }
+    else { const d = person(p.x0 + 36, p.y0 + 20, { shirt: '#16a34a', role: 'cashier', home: [p.x0 + 36, p.y0 + 20] }); people.push(d); shopR[k] = { cashier: d }; }
+  });
+  const drawPerson = (t, pp) => { const x = pp.x, y = pp.y, w = pp.moving ? Math.floor(t / 140) % 2 : 0, bob = pp.moving ? (w ? -0.6 : 0) : Math.sin(t / 500 + pp.id) * 0.4;
+    R('rgba(0,0,0,.22)', x - 4, y - 1, 8, 2);
+    R('#1f2937', x - 3 + (w ? 1 : 0), y - 4, 2, 4); R('#1f2937', x + 1 - (w ? 1 : 0), y - 4, 2, 4);
+    R(pp.shirt, x - 3, y - 9 + bob, 6, 6);
+    const arm = pp.cook > 0 ? Math.floor(t / 150) % 2 * 2 : (pp.role === 'cashier' && !pp.moving && Math.floor(t / 300 + pp.id) % 2 ? 1 : 0);
+    R(pp.shirt, x - 4, y - 8 + bob - (pp.cook > 0 ? arm : 0), 1, 4); R(pp.shirt, x + 3, y - 8 + bob - (pp.cook > 0 ? 2 - arm : 0), 1, 4);
+    R(pp.skin, x - 4, y - 5 + bob - (pp.cook > 0 ? arm : 0), 1, 1); R(pp.skin, x + 3, y - 5 + bob, 1, 1);
+    R(pp.skin, x - 3, y - 15 + bob, 6, 6); R(pp.hair, x - 3, y - 16 + bob, 6, 2); R(pp.hair, x - 4, y - 15 + bob, 1, 3); R(pp.hair, x + 3, y - 15 + bob, 1, 3);
+    R('#111827', x - 2, y - 12 + bob, 1, 1); R('#111827', x + 1, y - 12 + bob, 1, 1); R('#f87171', x - 1, y - 10 + bob, 2, 1);
+    if (pp.hat) { R(pp.hat, x - 3, y - 19 + bob, 6, 3); R(pp.hat, x - 2, y - 21 + bob, 4, 2); }
+    if (pp.carry) { R('#c68a5a', x - 4, y - 8 + bob, 8, 6); R('#e0b07a', x - 1, y - 8 + bob, 2, 6); } };
+  const bubble = (pp, t) => { if (!pp.say || t > pp.say.until) { pp.say = null; return; } g.font = '700 ' + (4.4 * SC) + 'px system-ui,sans-serif'; const tw = g.measureText(pp.say.txt).width + 10, bw = tw / SC, bx = Math.min(Math.max(pp.x - bw / 2, 1), W - bw - 1), by = pp.y - 27 - Math.min(4, (pp.say.until - t) < 400 ? 0 : 0);
+    R('#fff', bx, by, bw, 9); R('#fff', pp.x - 1, by + 9, 3, 2); R('#0f172a', bx, by, bw, 0.6); R('#0f172a', bx, by + 8.4, bw, 0.6); g.fillStyle = '#0f172a'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(pp.say.txt, (bx + bw / 2) * SC, (by + 4.8) * SC); };
+  /* --- chuyển động --- */
+  const route = (a, b) => { const A = places[a], B = places[b], pts = []; const inA = A.kind === 'shop' ? [A.cx, A.y0 + 20] : [A.cx, A.y1 - 8]; pts.push({ x: A.cx, y: inA[1] }); pts.push({ x: A.cx, y: A.kind === 'shop' ? A.y0 : A.y1 }); pts.push({ x: A.cx, y: 89 }); pts.push({ x: B.cx, y: 89 }); pts.push({ x: B.cx, y: B.kind === 'shop' ? B.y0 : B.y1 }); pts.push({ x: B.cx, y: B.kind === 'shop' ? B.y0 + 22 : B.y1 - 8 }); return pts; };
+  const walk = (a, b, o) => { const A = places[a]; if (!A || !places[b]) return; const pp = person(A.cx, A.kind === 'shop' ? A.y0 + 20 : A.y1 - 8, Object.assign({ temp: true, carry: true }, o)); pp.step = route(a, b); if (o && o.endSay) pp.step[pp.step.length - 1] = Object.assign(pp.step[pp.step.length - 1], { say: o.endSay, wait: 1800 }); pp.step.push({ x: places[b].cx, y: places[b].kind === 'shop' ? places[b].y0 + 22 : places[b].y1 - 8, leave: true, wait: 0 }); pp.onEndRemove = true; people.push(pp); };
+  const sayAt = (k, txt, who) => { const r = shopR[k]; if (!r) return; const pp = r[who || 'cashier'] || r.cashier; pp.say = { txt, until: performance.now() + 2600 }; };
+  const cook = (k, txt) => { const r = shopR[k]; if (!r || !r.chef) return sayAt(k, txt); r.chef.cook = performance.now() + 3500; r.chef.say = { txt: '🧑‍🍳 ' + txt, until: performance.now() + 3300 }; };
+  const customer = (k, txt) => { const p = places[k]; if (!p) return; const pp = person(p.cx + (Math.random() * 14 - 7), HH + 6, { temp: true, shirt: pick(SHIRT, uid + 1) }); pp.step = [{ x: pp.x, y: p.y0 + 62 }, { x: pp.x, y: p.y0 + 56, wait: 2200, say: txt, cashier: k }, { x: pp.x, y: HH + 8, leave: true }]; pp.onEndRemove = true; people.push(pp); };
+  const update = (dt, now) => { for (let i = people.length - 1; i >= 0; i--) { const pp = people[i]; if (pp.cook && now > pp.cook) pp.cook = 0;
+      if (pp.waitUntil && now < pp.waitUntil) { pp.moving = false; continue; } pp.waitUntil = 0;
+      const s = pp.step[0]; if (!s) { pp.moving = false; if (pp.onEndRemove) people.splice(i, 1); continue; }
+      const dx = s.x - pp.x, dy = s.y - pp.y, d = Math.hypot(dx, dy), v = 52 * dt / 1000;
+      if (d <= v) { pp.x = s.x; pp.y = s.y; pp.step.shift(); pp.moving = false; if (s.say) { if (s.cashier) { sayAt(s.cashier, s.say); } else pp.say = { txt: s.say, until: now + 2200 }; } if (s.wait) pp.waitUntil = now + s.wait; if (s.leave && !pp.step.length && pp.onEndRemove) { pp.carry = false; } }
+      else { pp.x += dx / d * v; pp.y += dy / d * v; pp.moving = true; } } };
+  const place = id => (id && places[id]) ? id : 'wh';
+  const feed = h('div', { class: 'lvfeed' });
+  const log = txt => { feed.prepend(h('div', {}, h('span', { style: 'color:var(--mut)' }, new Date().toLocaleTimeString('vi-VN') + ' '), txt)); while (feed.children.length > 40) feed.lastChild.remove(); };
+  const hand = (tb, ev, r) => {
+    if (ev === 'DELETE' || !r) return;
+    if (tb === 'retail_sales' && ev === 'INSERT') { const o = place(r.outlet_id); customer(o, '+' + fm(r.total || 0)); const c = cnt[r.outlet_id] = cnt[r.outlet_id] || { n: 0, rev: 0 }; c.n++; c.rev += +r.total || 0; log('🧾 Bán lẻ tại ' + oname(r.outlet_id) + (r.total ? ': ' + fm(r.total) : '')); }
+    else if (tb === 'orders') { if (ev === 'INSERT') { b2bToday++; walk('wh', 'b2b', { shirt: '#f59e0b', hat: '#b45309', endSay: 'Đơn ' + (r.code || 'mới') }); sayAt('wh', '📋 Đơn mới ' + (r.code || '')); log('📋 Đơn B2B mới ' + (r.code || '')); } else if (/deliver/i.test(r.status || '')) { walk('wh', 'b2b', { shirt: '#f59e0b', hat: '#b45309', endSay: (r.code || '') + ': ' + r.status }); log('🚚 Đơn B2B ' + (r.code || '') + ' → ' + r.status); } }
+    else if (tb === 'material_movements' && ev === 'INSERT') { if (r.kind === 'purchase_in') { walk('ncc', 'wh', { shirt: '#2563eb', hat: '#1d4ed8', endSay: '+' + Math.abs(r.qty) + ' ' + mname(r.material_id) }); sayAt('ncc', '🚚 Giao hàng!'); log('🚚 Nhập kho ' + Math.abs(r.qty) + ' ' + mname(r.material_id)); } else if (r.kind === 'production_out') { cook('wh', 'Sản xuất'); log('🧑‍🍳 Kho trung tâm sản xuất, dùng ' + Math.abs(r.qty) + ' ' + mname(r.material_id)); } else if (r.kind === 'waste') { sayAt('wh', '⚠️ Hao hụt'); log('⚠️ Hao hụt kho trung tâm: ' + mname(r.material_id)); } }
+    else if (tb === 'outlet_material_movements' && ev === 'INSERT') { const o = place(r.outlet_id), nm = mname(r.material_id);
+      if (r.kind === 'transfer_in') { walk('wh', o, { shirt: '#0ea5e9', hat: '#0369a1', endSay: '+' + r.qty + ' ' + nm }); log('🛵 Giao ' + r.qty + ' ' + nm + ' → ' + oname(r.outlet_id)); }
+      else if (r.kind === 'return_out') { walk(o, 'wh', { shirt: '#0ea5e9', hat: '#0369a1', endSay: 'Trả ' + Math.abs(r.qty) + ' ' + nm }); log('🛵 ' + oname(r.outlet_id) + ' trả ' + Math.abs(r.qty) + ' ' + nm + ' về kho'); }
+      else if (r.kind === 'production_out') { cook(o, 'Chế biến'); log('🧑‍🍳 ' + oname(r.outlet_id) + ' chế biến, dùng ' + Math.abs(r.qty) + ' ' + nm); }
+      else if (r.kind === 'count_adjust') { sayAt(o, r.qty < 0 ? '⚠️ Thiếu ' + Math.abs(r.qty) : '✔ Kiểm đếm'); log((r.qty < 0 ? '⚠️ Thiếu ' + Math.abs(r.qty) + ' ' + nm : '✔ Kiểm đếm lệch +' + r.qty + ' ' + nm) + ' tại ' + oname(r.outlet_id)); } }
+    else if (tb === 'stock_movements' && ev === 'INSERT') { if (r.kind === 'production_in') { const o = place(r.outlet_id); cook(o, '+' + r.qty + ' ' + pname(r.product_id)); log('🍲 Ra lô ' + r.qty + ' ' + pname(r.product_id) + ' tại ' + oname(r.outlet_id)); } else if (/transfer/i.test(r.kind || '') && r.qty > 0) { walk('wh', place(r.outlet_id), { shirt: '#0ea5e9', hat: '#0369a1', endSay: '+' + r.qty + ' ' + pname(r.product_id) }); log('📦 Chuyển ' + r.qty + ' ' + pname(r.product_id) + ' → ' + oname(r.outlet_id)); } }
+    else if (tb === 'shifts') { const o = place(r.outlet_id); if (ev === 'INSERT') { sayAt(o, '🔔 Mở ca'); log('🔔 ' + oname(r.outlet_id) + ' mở ca'); } else if (r.closed_at) { sayAt(o, '🔒 Chốt ca'); log('🔒 ' + oname(r.outlet_id) + ' chốt ca'); } }
+  };
+  const dot = h('span', { style: 'font-size:13px' }, '○ Đang kết nối…');
+  const ch = sb.channel('livemap-' + Math.random().toString(36).slice(2));
+  ['retail_sales', 'orders', 'material_movements', 'outlet_material_movements', 'stock_movements', 'shifts'].forEach(tb => ch.on('postgres_changes', { event: '*', schema: 'public', table: tb }, pl => { try { hand(tb, pl.eventType, pl.new); } catch (e) { console.error(e); } }));
+  ch.subscribe(st => { dot.textContent = st === 'SUBSCRIBED' ? '● Đang nhận sự kiện thật' : '○ ' + st; dot.style.color = st === 'SUBSCRIBED' ? '#16a34a' : '#f59e0b'; });
+  const root = h('div', {});
+  let last = performance.now(), alive = true;
+  const frame = now => { if (!root.isConnected && now - last > 3000) { alive = false; try { sb.removeChannel(ch); } catch (e) {} return; } const dt = Math.min(80, now - last); last = now; update(dt, now);
+    g.drawImage(bg, 0, 0);
+    Object.entries(places).forEach(([k, p]) => { if (p.kind === 'shop') { const c = cnt[k] || { n: 0, rev: 0 }; g.font = '700 ' + (3.8 * SC) + 'px system-ui,sans-serif'; g.fillStyle = '#334155'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(c.n + ' đơn · ' + fm(c.rev), p.cx * SC, (p.y1 - 5) * SC); } else if (p.kind === 'b2b') { g.font = '700 ' + (3.8 * SC) + 'px system-ui,sans-serif'; g.fillStyle = '#334155'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('Hôm nay: ' + b2bToday + ' đơn', p.cx * SC, (p.y1 - 4) * SC); }
+      const r = shopR[k]; if (r && r.chef && r.chef.cook) { for (let i = 0; i < 3; i++) { const ph = ((now / 600) + i / 3) % 1; R('rgba(255,255,255,' + (0.8 - ph * 0.8) + ')', r.chef.x - 6 + i * 4 + Math.sin(ph * 6) * 1.5, r.chef.y - 24 - ph * 10, 2, 2); } }
+      if (p.kind === 'shop' || p.kind === 'wh') { const sx = p.kind === 'shop' ? p.x0 + 6 : p.x0 + 40, sy = p.kind === 'shop' ? p.y0 + 10 : p.y0 + 28; const on = r && r.chef && r.chef.cook; R(on ? (Math.floor(now / 120) % 2 ? '#f97316' : '#fbbf24') : '#1f2937', sx + 3, sy + 3, 6, 3); }
+      if (p.kind === 'wh') { R(Math.floor(now / 700) % 2 ? '#38bdf8' : '#0b1220', p.x1 - 24, p.y0 + 26, 6, 4); } });
+    people.slice().sort((a, b) => a.y - b.y).forEach(pp => drawPerson(now, pp)); people.forEach(pp => bubble(pp, now)); requestAnimationFrame(frame); };
+  requestAnimationFrame(frame);
+  const demo = () => { const o = stores[0]; if (!o) return; const m0 = (mats[0] || {}).id; hand('material_movements', 'INSERT', { kind: 'purchase_in', qty: 20, material_id: m0 }); setTimeout(() => hand('outlet_material_movements', 'INSERT', { kind: 'transfer_in', outlet_id: o.id, qty: 5, material_id: m0 }), 1500); setTimeout(() => hand('outlet_material_movements', 'INSERT', { kind: 'production_out', outlet_id: o.id, qty: -2, material_id: m0 }), 6500); setTimeout(() => hand('retail_sales', 'INSERT', { outlet_id: o.id, total: 90000 }), 8000); setTimeout(() => hand('orders', 'INSERT', { code: 'THỬ' }), 9500); log('▶ Chạy thử hiệu ứng (không ghi dữ liệu)'); };
+  root.append(h('div', { class: 'card' }, h('h3', {}, 'Bản đồ hoạt động thời gian thật'),
+      h('div', { style: 'color:var(--mut);margin-bottom:8px' }, 'Nhân vật đứng tại chỗ chỉ là minh hoạ cho từng nơi. Nhân vật CHẠY và bong bóng chữ là MỘT SỰ KIỆN THẬT vừa xảy ra (nhập kho, giao nguyên liệu, bán hàng, đơn B2B, chế biến…), không phải AI tự quyết định.'),
+      h('div', { class: 'row' }, h('button', { class: 'btn ghost sm', onclick: demo }, 'Chạy thử hiệu ứng'), dot)),
+    h('div', { class: 'lvwrap' }, h('div', { class: 'lvbox' }, cv), h('div', { class: 'card' }, h('h3', {}, 'Dòng sự kiện'), feed)));
+  log('Sẵn sàng. Đang chờ hoạt động mới…');
+  return root;
 }
 
 /* ---------- Công thức (BOM) & giá vốn ---------- */
@@ -1081,7 +1205,7 @@ async function capacityCard(canEdit) {
       canEdit ? h('button', { class: 'btn ghost sm', onclick: () => setOne(c) }, 'Đặt ngưỡng') : null])));
 }
 
-const VIEWS = { admin: adminView, menu: menuView, dash: dashView, pos: posView, sales: salesView, shift: shiftView, stock: stockView, recv: recvView, batch: batchView, mat: matView, agent: agentView, omat: omatView, recipe: recipeView, po: poView, orders: ordersView, deliv: delivView, cust: custView, trade: tradeView, tasks: tasksView, rep: repView, audit: auditView };
+const VIEWS = { admin: adminView, menu: menuView, dash: dashView, pos: posView, sales: salesView, shift: shiftView, stock: stockView, recv: recvView, batch: batchView, mat: matView, live: liveView, agent: agentView, omat: omatView, recipe: recipeView, po: poView, orders: ordersView, deliv: delivView, cust: custView, trade: tradeView, tasks: tasksView, rep: repView, audit: auditView };
 
 /* ============ KHỞI ĐỘNG ============ */
 sb.auth.onAuthStateChange((ev, session) => {
