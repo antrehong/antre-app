@@ -159,6 +159,7 @@ const MODS = [
   ['recipe','Công thức & giá vốn', ['ADMIN', 'OPERATIONS_MANAGER', 'PRODUCTION', 'FINANCE']],
   ['omat',  'Nguyên liệu tại điểm bán', ['ADMIN', 'OPERATIONS_MANAGER', 'WAREHOUSE', 'PRODUCTION', 'FINANCE', 'OUTLET_MANAGER', 'OUTLET_STAFF']],
   ['agent', 'Trợ lý giám sát',    ['ADMIN']],
+  ['imp',   'Nhập / xuất file mẫu', ['ADMIN', 'OPERATIONS_MANAGER']],
   ['live',  'Bản đồ hoạt động',   ['ADMIN', 'OPERATIONS_MANAGER']],
   ['po',    'Mua hàng & NCC',     ['ADMIN', 'OPERATIONS_MANAGER', 'FINANCE']],
   ['orders','Đơn hàng B2B',       ['ADMIN', 'OPERATIONS_MANAGER', 'SALES_MANAGER', 'SALES', 'PRODUCTION', 'WAREHOUSE', 'QC', 'FINANCE']],
@@ -177,7 +178,7 @@ const GROUPS = [
   ['2 · Làm thành phẩm',           ['po', 'mat', 'omat', 'recipe', 'batch', 'menu']],
   ['3 · Bán hàng B2B',             ['orders', 'deliv', 'cust']],
   ['4 · Công việc & Marketing',    ['tasks', 'trade']],
-  ['5 · Quản trị',                 ['live', 'agent', 'rep', 'admin', 'audit']]
+  ['5 · Quản trị',                 ['live', 'agent', 'imp', 'rep', 'admin', 'audit']]
 ];
 const needsOutlet = m => ['pos', 'shift', 'recv'].includes(m);
 
@@ -263,7 +264,7 @@ async function go(mod, quiet) {
   const view = $('#view'); if (!quiet) view.replaceChildren(h('div', { class: 'empty' }, 'Đang tải…'));
   try { const node = await VIEWS[mod](); if (my === seq) view.replaceChildren(node); } catch (e) { fail(e); if (my === seq && !quiet) view.replaceChildren(h('div', { class: 'empty' }, 'Không tải được: ' + e.message)); }
 }
-const refresh = () => { if (!S.prof || document.querySelector('.modal') || ['pos', 'agent', 'live'].includes(S.mod)) return; const a = document.activeElement; if (a && ['INPUT', 'SELECT'].includes(a.tagName)) return; go(S.mod, true); };
+const refresh = () => { if (!S.prof || document.querySelector('.modal') || ['pos', 'agent', 'live', 'imp'].includes(S.mod)) return; const a = document.activeElement; if (a && ['INPUT', 'SELECT'].includes(a.tagName)) return; go(S.mod, true); };
 
 /* ============ THÔNG BÁO & REALTIME ============ */
 async function loadNotifs() {
@@ -469,7 +470,7 @@ async function auditView() {
 const STAGES = ['Lead', 'Contacted', 'Qualified', 'Sample Sent', 'Trial', 'First Order', 'Repeat Customer', 'Key Account', 'Inactive'];
 const KIND_VI = { ingredient: 'Nguyên liệu', packaging: 'Bao bì' };
 const MV_VI = { purchase_in: 'Nhập mua', production_out: 'Xuất sản xuất', adjust: 'Điều chỉnh', waste: 'Hao hụt', opening: 'Tồn đầu kỳ' };
-const NOOUTLET = ['live', 'agent', 'admin', 'menu', 'dash', 'orders', 'cust', 'batch', 'audit', 'mat', 'recipe', 'po', 'deliv', 'trade', 'tasks', 'rep'];
+const NOOUTLET = ['imp', 'live', 'agent', 'admin', 'menu', 'dash', 'orders', 'cust', 'batch', 'audit', 'mat', 'recipe', 'po', 'deliv', 'trade', 'tasks', 'rep'];
 const SALES_ROLES = ['ADMIN', 'OPERATIONS_MANAGER', 'SALES_MANAGER', 'SALES'];
 // Cập nhật/xóa qua RLS không báo lỗi khi bị từ chối (0 dòng) → tự kiểm tra để không báo "đã lưu" giả
 const mut = async p => { const d = await q(p.select('id')); if (!d || !d.length) throw new Error('Không có quyền hoặc không có bản ghi nào được thay đổi'); return d; };
@@ -851,6 +852,100 @@ async function liveView() {
   return root;
 }
 
+/* ---------- Nhập / xuất file mẫu hàng loạt (CSV): xem trước → kiểm tra từng dòng → nhập ---------- */
+const NORM = s => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/gi, 'd').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+function parseCsv(text) {
+  text = text.replace(/^﻿/, ''); const first = text.split(/\r?\n/, 1)[0] || '', sep = (first.match(/;/g) || []).length > (first.match(/,/g) || []).length ? ';' : (first.includes('\t') ? '\t' : ',');
+  const rows = []; let row = [], cur = '', q2 = false;
+  for (let i = 0; i < text.length; i++) { const c = text[i];
+    if (q2) { if (c === '"') { if (text[i + 1] === '"') { cur += '"'; i++; } else q2 = false; } else cur += c; }
+    else if (c === '"') q2 = true; else if (c === sep) { row.push(cur); cur = ''; }
+    else if (c === '\n' || c === '\r') { if (c === '\r' && text[i + 1] === '\n') i++; row.push(cur); cur = ''; if (row.some(x => x.trim() !== '')) rows.push(row); row = []; }
+    else cur += c; }
+  row.push(cur); if (row.some(x => x.trim() !== '')) rows.push(row); return rows;
+}
+function parseNum(v) { let s = String(v ?? '').replace(/[đ₫\s]/gi, ''); if (s === '') return null;
+  if (/^\d{1,3}(\.\d{3})+(,\d+)?$/.test(s)) s = s.replace(/\./g, '').replace(',', '.'); else if (/^\d{1,3}(,\d{3})+(\.\d+)?$/.test(s)) s = s.replace(/,/g, ''); else s = s.replace(',', '.');
+  const n = Number(s); return Number.isFinite(n) ? n : NaN; }
+const pickOpt = (v, opts) => { const n = NORM(v); const f = opts.find(o => NORM(o[0]) === n || NORM(o[1]) === n); return f ? f[0] : undefined; };
+
+async function impView() {
+  let mats = [], sups = [], custs = [], prods = [], recs = [], matByName, supNames, custNames, prodIds, recSet;
+  const reloadLookups = async () => {
+    [mats, sups, custs, prods, recs] = await Promise.all([q(sb.from('materials').select('id,name,unit,kind,active')), safe(q(sb.from('suppliers').select('id,name'))), safe(q(sb.from('customers').select('id,name'))), safe(q(sb.from('products').select('*'))), safe(q(sb.from('recipes').select('product_id,material_id')))]);
+    matByName = new Map(mats.map(m => [NORM(m.name), m])); supNames = new Set(sups.map(x => NORM(x.name))); custNames = new Set(custs.map(x => NORM(x.name))); prodIds = new Set(prods.map(x => String(x.id).toUpperCase())); recSet = new Set(recs.map(r => r.product_id + '|' + r.material_id)); };
+  await reloadLookups();
+  const KIND = [['ingredient', 'Nguyên liệu'], ['packaging', 'Bao bì']], CAT = ['Thực phẩm tươi', 'Nguyên liệu khô', 'Bao bì', 'Khác'].map(x => [x, x]), TERMS = ['COD', 'NET15', 'NET30'].map(x => [x, x]);
+  const VENUE = ['Karaoke', 'Beer Club', 'Pub', 'Lounge', 'Bar', 'Restaurant', 'Café', 'Distributor', 'Event/Catering'].map(x => [x, x]), STG = STAGES.map(x => [x, x]), TIER = [['Standard', 'Standard'], ['VIP', 'VIP']];
+  // mỗi cột: k = khoá, h = tiêu đề trong file, req = bắt buộc, ex = ví dụ
+  const DS = [
+    { id: 'mat', title: '1. Nguyên liệu & bao bì', note: 'Tạo danh mục nguyên liệu. Tên đã có thì bỏ qua (không ghi đè).', cols: [{ k: 'name', h: 'Tên nguyên liệu', req: 1, ex: 'Cóc xanh' }, { k: 'kind', h: 'Loại (Nguyên liệu / Bao bì)', ex: 'Nguyên liệu' }, { k: 'unit', h: 'Đơn vị', req: 1, ex: 'kg' }, { k: 'min_stock', h: 'Tồn tối thiểu', ex: '10' }],
+      export: async () => (await q(sb.from('materials').select('name,kind,unit,min_stock').eq('active', true).order('name'))).map(m => ({ 'Tên nguyên liệu': m.name, 'Loại (Nguyên liệu / Bao bì)': m.kind === 'packaging' ? 'Bao bì' : 'Nguyên liệu', 'Đơn vị': m.unit, 'Tồn tối thiểu': m.min_stock })),
+      check(r, seen) { const e = []; const name = r.name.trim(); if (!name) e.push('thiếu tên'); if (!r.unit.trim()) e.push('thiếu đơn vị'); const kind = r.kind.trim() ? pickOpt(r.kind, KIND) : 'ingredient'; if (!kind) e.push('loại phải là Nguyên liệu hoặc Bao bì'); const mn = r.min_stock.trim() ? parseNum(r.min_stock) : 0; if (Number.isNaN(mn) || mn < 0) e.push('tồn tối thiểu không hợp lệ');
+        if (e.length) return { err: e.join('; ') }; if (matByName.has(NORM(name)) || seen.has(NORM(name))) return { skip: 'đã có, bỏ qua' }; seen.add(NORM(name)); return { run: () => q(sb.from('materials').insert({ name, kind, unit: r.unit.trim(), min_stock: mn })) }; } },
+    { id: 'open', title: '2. Tồn nguyên liệu ban đầu', note: 'Nhập kho nguyên liệu đã có (tên phải khớp danh mục). Mỗi dòng là một lần nhập kho, giá bình quân tự tính.', cols: [{ k: 'name', h: 'Tên nguyên liệu', req: 1, ex: 'Cóc xanh' }, { k: 'qty', h: 'Số lượng', req: 1, ex: '50' }, { k: 'cost', h: 'Giá nhập / đơn vị (đ)', req: 1, ex: '40000' }, { k: 'note', h: 'Ghi chú', ex: 'Tồn đầu kỳ' }],
+      export: async () => (await q(sb.from('material_stock').select('*'))).map(s => ({ 'Tên nguyên liệu': (mats.find(m => m.id === s.material_id) || {}).name, 'Số lượng': s.qty })),
+      check(r) { const m = matByName.get(NORM(r.name)), e = [], qty = parseNum(r.qty), cost = parseNum(r.cost); if (!m) e.push('chưa có nguyên liệu "' + r.name + '" (nhập mục 1 trước)'); if (qty == null || Number.isNaN(qty) || qty <= 0) e.push('số lượng phải > 0'); if (cost == null || Number.isNaN(cost) || cost < 0) e.push('giá nhập không hợp lệ');
+        return e.length ? { err: e.join('; ') } : { run: () => rpc('receive_material', { p_material: m.id, p_qty: qty, p_unit_cost: cost, p_note: r.note.trim() || 'Nhập tồn từ file' }) }; } },
+    { id: 'sup', title: '3. Nhà cung cấp', note: 'Tên đã có thì bỏ qua.', cols: [{ k: 'name', h: 'Tên công ty', req: 1, ex: 'Chợ đầu mối A' }, { k: 'contact', h: 'Người liên hệ', ex: 'Anh Nam' }, { k: 'phone', h: 'Điện thoại', ex: '0901234567' }, { k: 'category', h: 'Nhóm hàng (Thực phẩm tươi / Nguyên liệu khô / Bao bì / Khác)', ex: 'Thực phẩm tươi' }, { k: 'quality', h: 'Điểm chất lượng (1-5)', ex: '4' }, { k: 'on_time_pct', h: 'Giao đúng hạn (%)', ex: '90' }, { k: 'pay_terms', h: 'Thanh toán (COD / NET15 / NET30)', ex: 'NET15' }],
+      export: async () => (await q(sb.from('suppliers').select('*').order('name'))).map(s => ({ 'Tên công ty': s.name, 'Người liên hệ': s.contact, 'Điện thoại': s.phone, 'Nhóm hàng (Thực phẩm tươi / Nguyên liệu khô / Bao bì / Khác)': s.category, 'Điểm chất lượng (1-5)': s.quality, 'Giao đúng hạn (%)': s.on_time_pct, 'Thanh toán (COD / NET15 / NET30)': s.pay_terms })),
+      check(r, seen) { const e = [], name = r.name.trim(); if (!name) e.push('thiếu tên'); const cat = r.category.trim() ? pickOpt(r.category, CAT) : 'Thực phẩm tươi', pt = r.pay_terms.trim() ? pickOpt(r.pay_terms, TERMS) : 'NET15', ql = r.quality.trim() ? parseNum(r.quality) : 4, ot = r.on_time_pct.trim() ? parseNum(r.on_time_pct) : 90;
+        if (!cat) e.push('nhóm hàng không hợp lệ'); if (!pt) e.push('thanh toán phải là COD/NET15/NET30'); if (Number.isNaN(ql) || ql < 1 || ql > 5) e.push('điểm chất lượng 1-5'); if (Number.isNaN(ot) || ot < 0 || ot > 100) e.push('giao đúng hạn 0-100');
+        if (e.length) return { err: e.join('; ') }; if (supNames.has(NORM(name)) || seen.has(NORM(name))) return { skip: 'đã có, bỏ qua' }; seen.add(NORM(name)); return { run: () => q(sb.from('suppliers').insert({ name, contact: r.contact.trim() || null, phone: r.phone.trim() || null, category: cat, quality: ql, on_time_pct: ot, pay_terms: pt })) }; } },
+    { id: 'cus', title: '4. Khách hàng B2B', note: 'Tên đã có thì bỏ qua.', cols: [{ k: 'name', h: 'Tên khách hàng', req: 1, ex: 'Quán Karaoke ABC' }, { k: 'venue', h: 'Loại hình', ex: 'Karaoke' }, { k: 'stage', h: 'Giai đoạn', ex: 'Lead' }, { k: 'price_tier', h: 'Bảng giá (Standard / VIP)', ex: 'Standard' }, { k: 'pay_terms', h: 'Thanh toán (COD / NET15 / NET30)', ex: 'COD' }, { k: 'salesperson', h: 'Sales phụ trách', ex: 'Lan' }, { k: 'phone', h: 'Điện thoại', ex: '0909000111' }, { k: 'email', h: 'Email', ex: '' }, { k: 'zalo', h: 'Zalo', ex: '' }, { k: 'address', h: 'Địa chỉ', ex: '12 Nguyễn Huệ' }, { k: 'potential_volume', h: 'Sản lượng tiềm năng / tháng (pack)', ex: '100' }],
+      export: async () => (await q(sb.from('customers').select('*').order('name'))).map(c => ({ 'Tên khách hàng': c.name, 'Loại hình': c.venue, 'Giai đoạn': c.stage, 'Bảng giá (Standard / VIP)': c.price_tier, 'Thanh toán (COD / NET15 / NET30)': c.pay_terms, 'Sales phụ trách': c.salesperson, 'Điện thoại': c.phone, 'Email': c.email, 'Zalo': c.zalo, 'Địa chỉ': c.address, 'Sản lượng tiềm năng / tháng (pack)': c.potential_volume })),
+      check(r, seen) { const e = [], name = r.name.trim(); if (!name) e.push('thiếu tên'); const venue = r.venue.trim() ? pickOpt(r.venue, VENUE) : null, stage = r.stage.trim() ? pickOpt(r.stage, STG) : 'Lead', tier = r.price_tier.trim() ? pickOpt(r.price_tier, TIER) : 'Standard', pt = r.pay_terms.trim() ? pickOpt(r.pay_terms, TERMS) : 'COD', pv = r.potential_volume.trim() ? parseNum(r.potential_volume) : null;
+        if (r.venue.trim() && !venue) e.push('loại hình không hợp lệ'); if (!stage) e.push('giai đoạn không hợp lệ'); if (!tier) e.push('bảng giá phải là Standard/VIP'); if (!pt) e.push('thanh toán phải là COD/NET15/NET30'); if (Number.isNaN(pv)) e.push('sản lượng không phải số');
+        if (e.length) return { err: e.join('; ') }; if (custNames.has(NORM(name)) || seen.has(NORM(name))) return { skip: 'đã có, bỏ qua' }; seen.add(NORM(name));
+        return { run: () => q(sb.from('customers').insert({ name, venue, stage, price_tier: tier, pay_terms: pt, salesperson: r.salesperson.trim() || null, phone: r.phone.trim() || null, email: r.email.trim() || null, zalo: r.zalo.trim() || null, address: r.address.trim() || null, potential_volume: pv })) }; } },
+    { id: 'prd', title: '5. Món bán (SKU) & giá', note: 'Mã SKU chữ HOA/số/dấu - (2–20 ký tự). Mã đã có thì bỏ qua. Công thức khai ở mục 6.', cols: [{ k: 'id', h: 'Mã SKU', req: 1, ex: 'TR-002' }, { k: 'name', h: 'Tên món', req: 1, ex: 'Trái cóc dầm' }, { k: 'category', h: 'Danh mục', ex: 'Main' }, { k: 'retail', h: 'Giá bán lẻ (đ)', req: 1, ex: '35000' }, { k: 'b2b', h: 'Giá sỉ B2B chuẩn (đ)', ex: '28000' }, { k: 'tier', h: 'Giá sỉ B2B VIP (đ)', ex: '26000' }, { k: 'shelf', h: 'Hạn dùng (ngày)', req: 1, ex: '7' }, { k: 'sort', h: 'Thứ tự hiển thị', ex: '0' }, { k: 'desc', h: 'Mô tả', ex: '' }, { k: 'vis', h: 'Hiển thị bán ngay (Có / Không)', ex: 'Có' }],
+      export: async () => { const pr = await safe(q(sb.from('product_prices').select('*'))); return prods.map(p => { const x = pr.find(y => y.product_id === p.id) || {}; return { 'Mã SKU': p.id, 'Tên món': p.name, 'Danh mục': p.category, 'Giá bán lẻ (đ)': p.retail_price, 'Giá sỉ B2B chuẩn (đ)': x.b2b_price, 'Giá sỉ B2B VIP (đ)': x.b2b_tier_price, 'Hạn dùng (ngày)': p.shelf_days, 'Thứ tự hiển thị': p.sort_order, 'Mô tả': p.description, 'Hiển thị bán ngay (Có / Không)': p.active ? 'Có' : 'Không' }; }); },
+      check(r, seen) { const e = [], id = r.id.trim().toUpperCase(), retail = parseNum(r.retail), b2b = r.b2b.trim() ? parseNum(r.b2b) : 0, tier = r.tier.trim() ? parseNum(r.tier) : 0, shelf = parseNum(r.shelf), sort = r.sort.trim() ? parseNum(r.sort) : 0;
+        if (!/^[A-Z0-9][A-Z0-9-]{1,19}$/.test(id)) e.push('mã SKU chỉ gồm chữ HOA, số, dấu -'); if (!r.name.trim()) e.push('thiếu tên món'); if ([retail, b2b, tier].some(x => x == null || Number.isNaN(x) || x < 0)) e.push('giá không hợp lệ'); if (tier > b2b) e.push('giá VIP không được cao hơn giá chuẩn'); if (shelf == null || Number.isNaN(shelf) || shelf <= 0) e.push('hạn dùng phải > 0'); if (Number.isNaN(sort)) e.push('thứ tự không phải số');
+        if (e.length) return { err: e.join('; ') }; if (prodIds.has(id) || seen.has(id)) return { skip: 'mã đã có, bỏ qua' }; seen.add(id); const vis = !/^(khong|no|false|0|an)$/.test(NORM(r.vis));
+        return { run: () => rpc('create_menu_item', { p_id: id, p_name: r.name.trim(), p_category: r.category.trim() || 'Main', p_retail: retail, p_b2b: b2b, p_b2b_tier: tier, p_shelf: Math.round(shelf), p_description: r.desc.trim() || null, p_sort: Math.round(sort), p_active: vis }) }; } },
+    { id: 'rcp', title: '6. Công thức (BOM) từng món', note: 'Mỗi dòng = 1 nguyên liệu của 1 món (món nhiều nguyên liệu thì nhiều dòng). Cần có món (mục 5) và nguyên liệu (mục 1). Cặp món + nguyên liệu đã có thì bỏ qua.', cols: [{ k: 'pid', h: 'Mã SKU món', req: 1, ex: 'TR-002' }, { k: 'name', h: 'Tên nguyên liệu', req: 1, ex: 'Cóc xanh' }, { k: 'qty', h: 'Lượng cho 1 pack (theo đơn vị nguyên liệu)', req: 1, ex: '0.3' }],
+      export: async () => recs.map(r => ({ 'Mã SKU món': r.product_id, 'Tên nguyên liệu': (mats.find(m => m.id === r.material_id) || {}).name })),
+      check(r, seen) { const e = [], pid = r.pid.trim().toUpperCase(), m = matByName.get(NORM(r.name)), qty = parseNum(r.qty); const pnew = pendingProducts.has(pid);
+        if (!prodIds.has(pid) && !pnew) e.push('chưa có món ' + pid + ' (nhập mục 5 trước)'); if (!m) e.push('chưa có nguyên liệu "' + r.name + '"'); if (qty == null || Number.isNaN(qty) || qty <= 0) e.push('lượng phải > 0'); if (e.length) return { err: e.join('; ') };
+        const key = pid + '|' + m.id; if (recSet.has(key) || seen.has(key)) return { skip: 'đã có trong công thức, bỏ qua' }; seen.add(key); return { run: () => q(sb.from('recipes').insert({ product_id: pid, material_id: m.id, qty_per_pack: qty })) }; } }];
+  const pendingProducts = new Set();
+  const dlCsv = (name, rows, cols) => { const keys = cols || Object.keys(rows[0] || {}); const esc = v => { v = v ?? ''; if (typeof v === 'string' && /^[=+\-@]/.test(v) && !/^-?\d+([.,]\d+)?$/.test(v)) v = "'" + v; return '"' + String(v).replace(/"/g, '""') + '"'; };
+    const txt = '﻿' + [keys.map(esc).join(','), ...rows.map(r => keys.map(k => esc(r[k])).join(','))].join('\r\n'); const a = h('a', { href: URL.createObjectURL(new Blob([txt], { type: 'text/csv;charset=utf-8' })), download: name }); document.body.append(a); a.click(); a.remove(); };
+  const out = h('div', {});
+  const card = d => {
+    const body = h('div', {}), status = h('div', { style: 'margin-top:8px;color:var(--mut)' });
+    const tpl = () => dlCsv('mau_' + d.id + '.csv', [Object.fromEntries(d.cols.map(c => [c.h, c.ex ? ((d.id === 'mat' || d.id === 'sup' || d.id === 'cus' || d.id === 'prd' || d.id === 'rcp' || d.id === 'open') && c.k === d.cols[0].k ? '(Ví dụ) ' + c.ex : c.ex) : '']))], d.cols.map(c => c.h));
+    const exp = async () => { try { const rows = await d.export(); if (!rows.length) return toast('Chưa có dữ liệu để xuất', true); dlCsv('du_lieu_' + d.id + '_' + vnDate() + '.csv', rows); } catch (e) { fail(e); } };
+    const input = h('input', { type: 'file', accept: '.csv,text/csv,.txt', style: 'display:none', onchange: async e => { const f = e.target.files[0]; e.target.value = ''; if (!f) return; await load(await f.text()); } });
+    async function load(text) {
+      if (text.includes('�')) toast('File có ký tự lạ: hãy lưu lại dạng "CSV UTF-8" trong Excel', true);
+      const rows = parseCsv(text); if (rows.length < 2) { body.replaceChildren(h('div', { class: 'empty' }, 'File trống hoặc chỉ có dòng tiêu đề.')); return; }
+      const head = rows[0].map(NORM), idx = {}; const missing = []; d.cols.forEach(c => { let i = head.indexOf(NORM(c.h)); if (i < 0) i = head.findIndex(x => x && (NORM(c.h).startsWith(x) || x.startsWith(NORM(c.h).split(' ').slice(0, 2).join(' ')))); if (i < 0 && c.req) missing.push(c.h); idx[c.k] = i; });
+      if (missing.length) { body.replaceChildren(h('div', { class: 'empty' }, 'Thiếu cột bắt buộc: ' + missing.join(', ') + '. Hãy dùng đúng file mẫu.')); return; }
+      if (d.id === 'rcp') { pendingProducts.clear(); }
+      const seen = new Set(), items = [];
+      rows.slice(1).forEach((raw, n) => { const r = {}; d.cols.forEach(c => r[c.k] = idx[c.k] >= 0 ? String(raw[idx[c.k]] ?? '') : ''); if (/^\(?vi du\)?/.test(NORM(r[d.cols[0].k]))) return; const res = d.check(r, seen); items.push({ line: n + 2, r, ...res }); });
+      const okN = items.filter(x => x.run).length, skipN = items.filter(x => x.skip).length, errN = items.filter(x => x.err).length;
+      const btn = h('button', { class: 'btn', disabled: !okN, onclick: () => go2() }, 'Nhập ' + okN + ' dòng hợp lệ');
+      const tbl = table(['Dòng', d.cols[0].h, d.cols[1] ? d.cols[1].h : '', 'Kết quả'], items.slice(0, 300).map(x => [x.line, x.r[d.cols[0].k], x.r[d.cols[1].k] ?? '', x.err ? h('span', { style: 'color:var(--bad)' }, '✖ ' + x.err) : x.skip ? h('span', { style: 'color:var(--mut)' }, '— ' + x.skip) : h('span', { style: 'color:var(--ok)' }, '✔ hợp lệ')]));
+      body.replaceChildren(h('div', { style: 'margin:8px 0' }, h('b', {}, items.length + ' dòng: '), h('span', { style: 'color:var(--ok)' }, okN + ' hợp lệ'), ' · ', h('span', {}, skipN + ' bỏ qua (đã có)'), ' · ', h('span', { style: 'color:var(--bad)' }, errN + ' lỗi')), tbl, ...(items.length > 300 ? [h('div', { style: 'color:var(--mut)' }, 'Chỉ hiện 300 dòng đầu; việc nhập vẫn xử lý toàn bộ.')] : []), h('div', { class: 'row', style: 'margin-top:8px' }, btn));
+      async function go2() {
+        if (!await confirmBox('Nhập ' + okN + ' dòng vào hệ thống? Dòng lỗi và dòng đã có sẽ không được nhập.')) return; btn.disabled = true; let done = 0; const bad = [];
+        for (const x of items.filter(y => y.run)) { try { await x.run(); done++; if (d.id === 'prd') pendingProducts.add(x.r.id.trim().toUpperCase()); } catch (e) { bad.push({ ...x.r, 'Lỗi': (e && e.message) || String(e) }); } status.textContent = 'Đang nhập… ' + (done + bad.length) + '/' + okN; }
+        status.textContent = 'Xong: nhập được ' + done + '/' + okN + ' dòng' + (bad.length ? ', ' + bad.length + ' dòng lỗi (đã tải file lỗi về để sửa và nhập lại).' : '.'); toast('Đã nhập ' + done + ' dòng' + (bad.length ? ', lỗi ' + bad.length : ''), !!bad.length);
+        if (bad.length) dlCsv('loi_' + d.id + '_' + vnDate() + '.csv', bad.map(b => Object.fromEntries([...d.cols.map(c => [c.h, b[c.k]]), ['Lỗi', b['Lỗi']]])));
+        await reloadLookups(); if (d.id === 'prd') await loadProducts().catch(() => {});
+      }
+    }
+    return h('div', { class: 'card' }, h('h3', {}, d.title), h('div', { style: 'color:var(--mut);margin-bottom:8px' }, d.note), h('div', { style: 'font-size:12px;color:var(--mut);margin-bottom:8px' }, 'Cột: ' + d.cols.map(c => c.h + (c.req ? ' *' : '')).join(' · ')),
+      h('div', { class: 'row' }, h('button', { class: 'btn ghost sm', onclick: tpl }, '⬇ Tải file mẫu'), h('button', { class: 'btn sm', onclick: () => input.click() }, '⬆ Chọn file đã điền'), h('button', { class: 'btn ghost sm', onclick: exp }, 'Xuất dữ liệu hiện có'), input), status, body);
+  };
+  out.append(h('div', { class: 'card' }, h('h3', {}, 'Nhập dữ liệu hàng loạt bằng file mẫu'),
+    h('div', { style: 'color:var(--mut)' }, 'Cách làm: (1) Bấm "Tải file mẫu" → (2) mở bằng Excel, xoá dòng "(Ví dụ)" hoặc để nguyên, điền dữ liệu → (3) lưu dạng ', h('b', {}, 'CSV UTF-8'), ' → (4) "Chọn file đã điền". App kiểm tra từng dòng, hiện bảng xem trước, bạn bấm "Nhập" thì mới ghi. ', h('b', {}, 'Làm đúng thứ tự 1 → 6'), ' (nguyên liệu trước, tồn đầu và công thức sau). Có thể nhập nhiều lần; dòng đã có sẽ được bỏ qua, không bị ghi đè.')), ...DS.map(card));
+  return out;
+}
+
 /* ---------- Công thức (BOM) & giá vốn ---------- */
 async function recipeView() {
   const [lines, mats, costs, pcost, prices] = await Promise.all([q(sb.from('recipes').select('id,product_id,material_id,qty_per_pack')), q(sb.from('materials').select('id,name,kind,unit').order('name')),
@@ -1205,7 +1300,7 @@ async function capacityCard(canEdit) {
       canEdit ? h('button', { class: 'btn ghost sm', onclick: () => setOne(c) }, 'Đặt ngưỡng') : null])));
 }
 
-const VIEWS = { admin: adminView, menu: menuView, dash: dashView, pos: posView, sales: salesView, shift: shiftView, stock: stockView, recv: recvView, batch: batchView, mat: matView, live: liveView, agent: agentView, omat: omatView, recipe: recipeView, po: poView, orders: ordersView, deliv: delivView, cust: custView, trade: tradeView, tasks: tasksView, rep: repView, audit: auditView };
+const VIEWS = { admin: adminView, menu: menuView, dash: dashView, pos: posView, sales: salesView, shift: shiftView, stock: stockView, recv: recvView, batch: batchView, mat: matView, imp: impView, live: liveView, agent: agentView, omat: omatView, recipe: recipeView, po: poView, orders: ordersView, deliv: delivView, cust: custView, trade: tradeView, tasks: tasksView, rep: repView, audit: auditView };
 
 /* ============ KHỞI ĐỘNG ============ */
 sb.auth.onAuthStateChange((ev, session) => {
